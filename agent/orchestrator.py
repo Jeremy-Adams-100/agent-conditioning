@@ -1389,6 +1389,17 @@ def run_loop(
         except ClaudeCliError as e:
             print(f"\n[ERROR] {e}\n")
             conversation.pop()
+            # Auto-save: compact whatever we have so work survives a quit
+            if len(conversation) >= 2:
+                print("[ORCHESTRATOR] Auto-saving session to prevent data loss...")
+                try:
+                    system_prompt, conversation, depth, parent_id = compact_with_conditioning(
+                        config, conn, conversation, depth, parent_id,
+                        tokens_at_compact=estimate_tokens(format_conversation_as_text(conversation)),
+                    )
+                    print("[ORCHESTRATOR] Session saved. You can quit safely or continue.")
+                except Exception as save_err:
+                    print(f"[ORCHESTRATOR] Auto-save failed: {save_err}")
             continue
 
         response_text = envelope.get("result", "")
