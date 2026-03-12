@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Runtime data (created on first run)
+agent/data/sessions.db
+agent/data/mcp_config.json
+
+# uv lock file is committed for reproducibility
+# uv.lock

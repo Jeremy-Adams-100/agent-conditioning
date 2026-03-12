@@ -1,0 +1,43 @@
+# config.yaml
+
+# === Model ===
+model: opus                          # alias (sonnet, opus, haiku) or full name
+context_window: 200000
+model_tier: opus
+
+# === Compact ===
+compact_threshold: 0.80
+compact_db: ./data/sessions.db
+max_summary_pct: 0.15
+depth_compression: gentle
+
+# === Philosophy ===
+philosophy: efficient
+
+# === Framework ===
+framework: staged
+
+# === Protocol ===
+checkpoint_format: standard
+require_checkpoint_first: false
+user_gate_approval: false
+anti_patterns_enabled: true
+
+# === Permissions ===
+# Directory the agent can access (absolute path, scopes file tools)
+# File tools (Read, Write, Edit, Glob, Grep) are restricted to this path.
+# Leave empty for no path restriction.
+working_directory: /data/home/jadams2
+
+# Tools allowed in non-interactive (-p) mode.
+# File tools are automatically scoped to working_directory above.
+# Bash accepts optional patterns: "Bash(npm test:npm run build)"
+# Set the entire key to "dangerously_skip_all" to bypass all checks (not recommended).
+allowed_tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - Bash
+  - WebSearch
