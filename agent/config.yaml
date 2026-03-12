@@ -4,6 +4,7 @@
 model: opus                          # alias (sonnet, opus, haiku) or full name
 context_window: 200000
 model_tier: opus
+cli_timeout: 0                       # seconds per claude -p call (0 = no timeout)
 
 # === Compact ===
 compact_threshold: 0.80

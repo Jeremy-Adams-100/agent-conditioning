@@ -582,6 +582,7 @@ def load_config(path: str | Path | None = None) -> dict:
         "anti_patterns_enabled": True,
         "working_directory": "",
         "allowed_tools": ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "WebSearch"],
+        "cli_timeout": 0,
     }
     for key, default in defaults.items():
         config.setdefault(key, default)
@@ -1070,7 +1071,7 @@ def call_claude(
     prompt: str,
     system_prompt: str,
     model: str = "sonnet",
-    timeout: int = 600,
+    timeout: int = 0,
     disable_tools: bool = False,
     mcp_config: str | None = None,
     cwd: str | None = None,
@@ -1084,6 +1085,8 @@ def call_claude(
       result: str — the model's text response
       usage: {input_tokens: int, output_tokens: int}
       duration_ms: int
+
+    timeout: seconds to wait (0 = no timeout).
     """
     cmd = [
         "claude", "-p",
@@ -1114,7 +1117,7 @@ def call_claude(
             input=prompt,
             capture_output=True,
             text=True,
-            timeout=timeout,
+            timeout=timeout or None,
             cwd=cwd or "/tmp",
             env=env,
         )
@@ -1254,6 +1257,7 @@ def compact_with_conditioning(
         prompt=f"Summarize the following conversation for context continuity:\n\n{conversation_text}",
         system_prompt=summary_prompt,
         model=config["model"],
+        timeout=config.get("cli_timeout", 0),
         disable_tools=True,
     )
 
@@ -1377,6 +1381,7 @@ def run_loop(
                 prompt=prompt_text,
                 system_prompt=system_prompt,
                 model=config["model"],
+                timeout=config.get("cli_timeout", 0),
                 mcp_config=mcp_config_path,
                 cwd=config.get("working_directory") or None,
                 permission_flags=permission_flags,
