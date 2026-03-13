@@ -27,13 +27,17 @@ anti_patterns_enabled: true
 # === Permissions ===
 # Directory the agent can access (absolute path, scopes file tools)
 # File tools (Read, Write, Edit, Glob, Grep) are restricted to this path.
+# Bash is NOT path-restricted by this setting — see operating protocol
+# for soft directory boundaries enforced via instructions.
 # Leave empty for no path restriction.
-working_directory: /data/home/jadams2
+working_directory: /data/home/jadams2/wolfram-bridge
 
 # Tools allowed in non-interactive (-p) mode.
 # File tools are automatically scoped to working_directory above.
 # Bash accepts optional patterns: "Bash(npm test:npm run build)"
 # Set the entire key to "dangerously_skip_all" to bypass all checks (not recommended).
+wolfram_path: /data/home/jadams2/bin/wolfram
+
 allowed_tools:
   - Read
   - Write

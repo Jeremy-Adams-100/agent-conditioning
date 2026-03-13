@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
 
 from auto_compact.db import (
     count_sessions,
@@ -824,6 +826,8 @@ def assemble_system_prompt(config: dict, session_summary: dict | None = None) ->
         ),
         "stage_transition_block": build_stage_transition_block(config["user_gate_approval"]),
         "anti_patterns_block": build_anti_patterns_block(config["anti_patterns_enabled"]),
+        "wolfram_path": config.get("wolfram_path", ""),
+        "working_directory": config.get("working_directory", ""),
     }
 
     prompt_parts.append(fill_simple_vars(protocol_template, protocol_vars))
@@ -1313,6 +1317,28 @@ def compact_with_conditioning(
     return new_system_prompt, new_conversation, new_depth, new_parent_id
 
 
+def _save_session_on_exit(
+    config: dict,
+    conn,
+    conversation: list[dict],
+    depth: int,
+    parent_id: str | None,
+    reason: str = "exit",
+) -> None:
+    """Save current session via compaction before exiting. No-op if conversation is too short."""
+    if len(conversation) < 2:
+        return
+    print(f"[ORCHESTRATOR] Saving session ({reason})...")
+    try:
+        compact_with_conditioning(
+            config, conn, conversation, depth, parent_id,
+            tokens_at_compact=estimate_tokens(format_conversation_as_text(conversation)),
+        )
+        print("[ORCHESTRATOR] Session saved.")
+    except Exception as save_err:
+        print(f"[ORCHESTRATOR] Save failed: {save_err}")
+
+
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
@@ -1329,6 +1355,7 @@ def run_loop(
     """Run the main conversation loop via Claude CLI."""
     conversation: list[dict] = []
     permission_flags = build_allowed_tools_flags(config)
+    prompt_session = PromptSession(history=InMemoryHistory())
 
     print("=" * 60)
     print("  Auto-Compact Agent Conditioning v1.0 (Max plan)")
@@ -1345,20 +1372,37 @@ def run_loop(
     else:
         print("  Fresh session (no prior context)")
     print("=" * 60)
-    print("\nType your message (or 'quit' to exit).\n")
+    print("\nType your message (or 'quit' to exit, '/complete' to save & exit, '/clear' to start fresh).\n")
 
     while True:
         try:
-            user_input = input("You: ").strip()
+            user_input = prompt_session.prompt("You: ").strip()
         except (EOFError, KeyboardInterrupt):
+            _save_session_on_exit(config, conn, conversation, depth, parent_id, reason="interrupted")
             print("\n\nExiting.")
             break
 
         if not user_input:
             continue
         if user_input.lower() in ("quit", "exit", "/quit", "/exit"):
+            _save_session_on_exit(config, conn, conversation, depth, parent_id, reason="user quit")
             print("Exiting.")
             break
+
+        if user_input.strip().lower() == "/complete":
+            _save_session_on_exit(config, conn, conversation, depth, parent_id, reason="task completed")
+            print("Task marked complete. Exiting.")
+            break
+
+        # Handle /clear — save current work, then reset to fresh session
+        if user_input.strip().lower() == "/clear":
+            _save_session_on_exit(config, conn, conversation, depth, parent_id, reason="clear")
+            system_prompt = assemble_system_prompt(config, session_summary=None)
+            conversation = []
+            depth = 0
+            parent_id = None
+            print("[ORCHESTRATOR] Context cleared. Starting fresh session (previous sessions still searchable).")
+            continue
 
         # Handle manual /compact command
         if user_input.strip().lower() == "/compact" and conversation:

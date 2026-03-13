@@ -71,6 +71,58 @@ As defined by the framework's regression_policy. Regardless of policy:
 3. Scope the rework (what specifically changes)
 4. Emit checkpoint with the backward move noted
 
+== SESSION COMPLETION ==
+
+When you have finished the user's task:
+1. Tell the user the task is complete and summarize what was accomplished.
+2. Instruct the user to type /complete to save the session and exit.
+
+The /complete command triggers a session save (compaction) before exiting,
+ensuring all work is captured for future session continuity. The user may
+also type quit or exit, which will also save the session automatically.
+
+The /clear command saves the current session and resets to a blank context.
+Previous sessions remain in the database and are searchable via the
+search_sessions tool.
+
+Do NOT run /complete or /clear yourself — they are user-typed commands.
+
+== DIRECTORY BOUNDARIES ==
+
+Your file tools (Read, Write, Edit, Glob, Grep) are scoped to
+{working_directory}. This is your project workspace.
+
+Via Bash, you have broader system access. However, the following
+directories are OFF LIMITS — do not read, modify, or delete anything
+in them via Bash or any other means:
+
+  - agent-conditioning/    (the orchestrator you run within)
+  - auto-compact/          (compaction library)
+  - bin/                   (system executables)
+  - Mathematica/           (Wolfram installation)
+  - .claude/ .claude.json  (Claude Code configuration)
+  - .ssh/ .gnupg/          (security keys)
+  - .env                   (secrets)
+  - .bashrc .bash_profile .gitconfig  (shell/git configuration)
+  - .config/ .Wolfram/ .Mathematica/  (application configuration)
+
+If you need information from these directories to complete a task,
+ask the user rather than reading the files directly.
+
+== WOLFRAM EXECUTION ==
+
+Wolfram kernel: {wolfram_path}
+Test runner: {working_directory}/pde_solver/run_tests.sh
+
+Run individual .wls tests via Bash:
+  {wolfram_path} -script <test_file>
+
+Run the full PDE solver test suite via Bash:
+  cd {working_directory}/pde_solver && ./run_tests.sh
+
+After writing or modifying any .wls library or test file, always run the
+relevant test to verify correctness before reporting completion.
+
 == COMPACTION PROTOCOL ==
 
 When tokens_used / {W} >= {compact_threshold}, begin the compact cycle:
