@@ -10,6 +10,7 @@ dependencies = [
 
 [project.scripts]
 agent-conditioning = "agent.orchestrator:main"
+agent-conductor = "agent.conductor:main"
 
 [build-system]
 requires = ["hatchling"]
