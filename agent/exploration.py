@@ -5,6 +5,10 @@ Runs a sequential three-agent loop (research → worker → audit) until
 stopped via Ctrl+C or max_cycles reached. Each agent is a single-turn
 call_claude() invocation via the existing conductor.run_agent().
 
+Each agent's output is stored in sessions.db as the single source of
+truth. A simple status file (exploration_status.md) is overwritten
+each cycle with deterministic data (cycle count, failures, status).
+
 Usage:
     python -m agent.exploration exploration-score.yaml
     python -m agent.exploration exploration-score.yaml --reset
@@ -15,6 +19,7 @@ import json
 import signal
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +27,7 @@ import yaml
 
 from agent.conductor import run_agent
 from agent.orchestrator import load_config
+from auto_compact.db import init_db, store_session
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "output"
@@ -86,72 +92,59 @@ def load_state(path: Path) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Cycle reports
+# Sessions.db logging — single source of truth
 # ---------------------------------------------------------------------------
 
 
-def write_agent_report(output_dir: Path, cycle: int, agent_name: str, content: str) -> None:
-    report_dir = output_dir / "cycle_reports"
-    report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / f"cycle_{cycle:03d}_{agent_name}.md").write_text(content or "")
+def _store_agent_output(
+    conn, agent_name: str, agent_def: dict, output_text: str,
+    cycle: int, parent_id: str | None,
+) -> str:
+    """Store an agent's output in sessions.db. Returns the new session_id."""
+    session_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+    try:
+        store_session(
+            conn,
+            session_id=session_id,
+            parent_id=parent_id,
+            depth=cycle,
+            timestamp=timestamp,
+            summary_xml=output_text,
+            philosophy=agent_def.get("philosophy"),
+            framework=agent_def.get("framework"),
+            token_estimate=len(output_text) // 4,
+            record_type="exploration",
+        )
+    except Exception as e:
+        print(f"[exploration]   DB write failed: {e}", flush=True)
+    return session_id
 
 
-def write_cycle_summary(output_dir: Path, cycle: int, results: dict) -> None:
-    report_dir = output_dir / "cycle_reports"
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    decision = _extract_decision(results.get("audit_report", ""))
-    ts = datetime.now(timezone.utc).isoformat()[:19] + "Z"
-
-    summary = (
-        f"# Cycle {cycle} Summary\n\n"
-        f"**Audit Decision:** {decision}\n"
-        f"**Timestamp:** {ts}\n\n"
-        f"## Research Brief (excerpt)\n{_excerpt(results.get('research_brief', ''))}\n\n"
-        f"## Work Output (excerpt)\n{_excerpt(results.get('work_output', ''))}\n\n"
-        f"## Audit Report (excerpt)\n{_excerpt(results.get('audit_report', ''))}\n"
-    )
-    (report_dir / f"cycle_{cycle:03d}_summary.md").write_text(summary)
+# ---------------------------------------------------------------------------
+# Status file — deterministic, overwritten each cycle
+# ---------------------------------------------------------------------------
 
 
-def update_status_file(output_dir: Path, cycle: int, results: dict,
-                       status: str, failures: dict) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    decision = _extract_decision(results.get("audit_report", ""))
-    fail_lines = "\n".join(
-        f"- {k}: {v} consecutive" for k, v in failures.items() if v > 0
-    ) or "None"
+def update_status_file(output_dir: Path, cycle: int, status: str,
+                       failures: dict) -> None:
+    """Write a simple status file with only deterministic data."""
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fail_lines = "\n".join(
+            f"- {k}: {v} consecutive" for k, v in failures.items() if v > 0
+        ) or "None"
 
-    md = (
-        f"# Exploration Status\n\n"
-        f"**Cycles Completed:** {cycle}\n"
-        f"**Last Audit Decision:** {decision}\n"
-        f"**Status:** {status}\n"
-        f"**Updated:** {datetime.now(timezone.utc).isoformat()[:19]}Z\n\n"
-        f"## Directive\n{results.get('directive', 'N/A')}\n\n"
-        f"## Recent Failures\n{fail_lines}\n"
-    )
-    (output_dir / "exploration_status.md").write_text(md)
-
-
-def _extract_decision(audit_text: str) -> str:
-    """Extract VALIDATED/CONTINUE/PIVOT from audit report text."""
-    if not audit_text:
-        return "N/A"
-    for line in audit_text.split("\n"):
-        stripped = line.strip()
-        if stripped in ("VALIDATED", "CONTINUE", "PIVOT"):
-            return stripped
-    return "UNKNOWN"
-
-
-def _excerpt(text: str, max_chars: int = 500) -> str:
-    if not text:
-        return "(empty)"
-    text = text.strip()
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars] + "\n...(truncated)"
+        md = (
+            f"# Exploration Status\n\n"
+            f"**Cycles Completed:** {cycle}\n"
+            f"**Status:** {status}\n"
+            f"**Updated:** {datetime.now(timezone.utc).isoformat()[:19]}Z\n\n"
+            f"## Failure Tracking\n{fail_lines}\n"
+        )
+        (output_dir / "exploration_status.md").write_text(md)
+    except OSError as e:
+        print(f"[exploration] Status file write failed: {e}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -216,10 +209,12 @@ def run_exploration(
     output_dir = Path(output_dir or DEFAULT_OUTPUT_DIR)
     state_path = Path(state_path or DEFAULT_STATE_PATH)
 
+    # Initialize sessions.db
+    conn = init_db(Path(config["compact_db"]))
+
     loop_cfg = score.get("loop", {})
     max_cycles = loop_cfg.get("max_cycles")
     base_cooldown = loop_cfg.get("cycle_cooldown_seconds", 0)
-    report_every = loop_cfg.get("report_every_cycle", True)
 
     flow = score["flow"]  # list of agent name strings
     agents = score["agents"]
@@ -251,6 +246,7 @@ def run_exploration(
         print("[exploration] Starting fresh exploration", flush=True)
 
     total_failure_streak = 0
+    last_session_id = None  # chains parent_ids across agents
 
     # Banner
     print(f"[exploration] Task: {task.strip()[:120]}", flush=True)
@@ -300,9 +296,12 @@ def run_exploration(
                     f"{usage.get('output_tokens',0)}out)",
                     flush=True,
                 )
-                if report_every:
-                    for content in result["outputs"].values():
-                        write_agent_report(output_dir, cycle, agent_name, content)
+                # Store output in sessions.db
+                output_text = "\n\n".join(result["outputs"].values())
+                last_session_id = _store_agent_output(
+                    conn, agent_name, agent_def, output_text,
+                    cycle, last_session_id,
+                )
             else:
                 # --- Failure handling ---
                 consecutive_failures[agent_name] += 1
@@ -320,10 +319,12 @@ def run_exploration(
                     print("[exploration]   Skipping rest of cycle.", flush=True)
                     break
                 elif i == len(flow) - 1:
-                    # Audit failed — use fallback
+                    # Audit failed — use fallback and store it
                     results["audit_report"] = FALLBACK_AUDIT
-                    if report_every:
-                        write_agent_report(output_dir, cycle, agent_name, FALLBACK_AUDIT)
+                    last_session_id = _store_agent_output(
+                        conn, agent_name, agent_def, FALLBACK_AUDIT,
+                        cycle, last_session_id,
+                    )
                 else:
                     # Middle agent (worker) failed — pass failure marker
                     for out_name in agent_def.get("outputs", []):
@@ -332,11 +333,6 @@ def run_exploration(
                             f"The {agent_name} agent was unable to produce "
                             f"output this cycle."
                         )
-                    if report_every:
-                        for out_name in agent_def.get("outputs", []):
-                            write_agent_report(
-                                output_dir, cycle, agent_name, results[out_name]
-                            )
 
                 # Pause on 3 consecutive failures for this agent
                 if consecutive_failures[agent_name] >= 3:
@@ -366,14 +362,8 @@ def run_exploration(
             )
             _sleep_interruptible(60)
 
-        # Write reports
-        if report_every:
-            write_cycle_summary(output_dir, cycle, results)
-            update_status_file(
-                output_dir, cycle, results, "running", consecutive_failures
-            )
-
-        # Save state
+        # Status file + state
+        update_status_file(output_dir, cycle, "running", consecutive_failures)
         save_state(state_path, cycle, results, consecutive_failures)
 
         elapsed = time.monotonic() - cycle_start
@@ -387,10 +377,10 @@ def run_exploration(
 
     # --- Stopped ---
     save_state(state_path, cycle, results, consecutive_failures)
-    update_status_file(output_dir, cycle, results, "stopped", consecutive_failures)
+    update_status_file(output_dir, cycle, "stopped", consecutive_failures)
+    conn.close()
     print(f"\n[exploration] Stopped after {cycle} cycles.", flush=True)
     print(f"[exploration] State: {state_path}", flush=True)
-    print(f"[exploration] Reports: {output_dir}", flush=True)
 
 
 # ---------------------------------------------------------------------------
