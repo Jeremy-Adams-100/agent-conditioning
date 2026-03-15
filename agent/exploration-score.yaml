@@ -26,7 +26,6 @@ seed:
 loop:
   max_cycles: null               # null = unlimited (stop with Ctrl+C)
   cycle_cooldown_seconds: 30     # pause between cycles (rate limit headroom)
-  report_every_cycle: true       # write cycle reports to output/
 
 agents:
 

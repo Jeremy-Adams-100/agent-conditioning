@@ -17,7 +17,6 @@ Usage:
 import argparse
 import json
 import signal
-import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -71,12 +70,14 @@ def load_exploration_score(path: str | Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def save_state(path: Path, cycle: int, results: dict, failures: dict) -> None:
+def save_state(path: Path, cycle: int, results: dict, failures: dict,
+               last_session_id: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     state = {
         "cycle": cycle,
         "results": results,
         "failures": failures,
+        "last_session_id": last_session_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     path.write_text(json.dumps(state, indent=2, default=str))
@@ -100,7 +101,11 @@ def _store_agent_output(
     conn, agent_name: str, agent_def: dict, output_text: str,
     cycle: int, parent_id: str | None,
 ) -> str:
-    """Store an agent's output in sessions.db. Returns the new session_id."""
+    """Store an agent's output in sessions.db.
+
+    Returns the new session_id on success, or the original parent_id
+    on failure (so the chain stays connected to the last successful record).
+    """
     session_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
     try:
@@ -116,9 +121,10 @@ def _store_agent_output(
             token_estimate=len(output_text) // 4,
             record_type="exploration",
         )
+        return session_id
     except Exception as e:
         print(f"[exploration]   DB write failed: {e}", flush=True)
-    return session_id
+        return parent_id or ""
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +238,7 @@ def run_exploration(
         results = state["results"]
         cycle = state["cycle"]
         consecutive_failures = state.get("failures", {name: 0 for name in agents})
+        last_session_id = state.get("last_session_id")
         print(f"[exploration] Resuming from cycle {cycle}", flush=True)
     else:
         results = {
@@ -243,10 +250,10 @@ def run_exploration(
         }
         cycle = 0
         consecutive_failures = {name: 0 for name in agents}
+        last_session_id = None
         print("[exploration] Starting fresh exploration", flush=True)
 
     total_failure_streak = 0
-    last_session_id = None  # chains parent_ids across agents
 
     # Banner
     print(f"[exploration] Task: {task.strip()[:120]}", flush=True)
@@ -364,7 +371,7 @@ def run_exploration(
 
         # Status file + state
         update_status_file(output_dir, cycle, "running", consecutive_failures)
-        save_state(state_path, cycle, results, consecutive_failures)
+        save_state(state_path, cycle, results, consecutive_failures, last_session_id)
 
         elapsed = time.monotonic() - cycle_start
         print(f"[exploration] Cycle {cycle} done ({elapsed:.0f}s)", flush=True)
@@ -376,7 +383,7 @@ def run_exploration(
             _sleep_interruptible(cooldown)
 
     # --- Stopped ---
-    save_state(state_path, cycle, results, consecutive_failures)
+    save_state(state_path, cycle, results, consecutive_failures, last_session_id)
     update_status_file(output_dir, cycle, "stopped", consecutive_failures)
     conn.close()
     print(f"\n[exploration] Stopped after {cycle} cycles.", flush=True)
