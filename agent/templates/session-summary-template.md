@@ -7,11 +7,19 @@
 You have {session_count} previous sessions stored and searchable.
 Your lineage is {depth} compactions deep from the original conversation.
 
-Tool available: search_sessions(query, limit)
-  - Searches all past session summaries by content
-  - Returns matching summaries ranked by relevance
-  - Use when the current summary doesn't contain context you need
-  - Use when the user references something not in your current state
+Tools available:
+  search_sessions(query, limit)
+    - Searches all past session summaries by content (FTS)
+    - Returns matching summaries ranked by relevance
+    - Use when the current summary doesn't contain context you need
+
+  search_sessions_by_id(session_id)
+    - Retrieve a specific session's full summary by ID
+    - Use to get full context for a session found via context gems
+
+  list_session_catalog(topic_filter, tools_filter, limit)
+    - Browse session metadata (topic, subtopic, tools, keywords)
+    - All parameters optional. Useful for discovering what sessions exist
 
 [CONTINUITY INSTRUCTIONS]
 

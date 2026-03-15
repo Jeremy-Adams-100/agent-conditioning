@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal MCP server exposing search_sessions tool over stdio.
+"""Minimal MCP server exposing session tools over stdio.
 
 Launched as a subprocess by Claude Code via --mcp-config.
 Reads the SQLite database path from the SESSIONS_DB environment variable.
@@ -12,7 +12,12 @@ import os
 import sys
 from pathlib import Path
 
-from auto_compact.db import init_db, search_sessions
+from auto_compact.db import (
+    get_session_by_id,
+    init_db,
+    list_session_catalog,
+    search_sessions,
+)
 
 
 def read_message():
@@ -46,6 +51,135 @@ def write_message(msg):
     sys.stdout.buffer.flush()
 
 
+TOOLS = [
+    {
+        "name": "search_sessions",
+        "description": (
+            "Search past session summaries for historical context. "
+            "Use when the current session summary doesn't contain "
+            "information you need, or when the user references past "
+            "work not in your current state."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language search query.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return (default 5).",
+                    "default": 5,
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "search_sessions_by_id",
+        "description": (
+            "Retrieve a specific session's full summary by ID. "
+            "Use this to get full context for a session found via "
+            "context gems or the catalog."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "The session ID to retrieve.",
+                },
+            },
+            "required": ["session_id"],
+        },
+    },
+    {
+        "name": "list_session_catalog",
+        "description": (
+            "List sessions with their catalog metadata (topic, subtopic, "
+            "tools, keywords). Returns a compact table for browsing. "
+            "Use this to find sessions beyond the pre-loaded context gems."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "topic_filter": {
+                    "type": "string",
+                    "description": "Optional. Filter to sessions matching this topic.",
+                },
+                "tools_filter": {
+                    "type": "string",
+                    "description": "Optional. Filter to sessions that used this tool.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum rows to return (default 25, max 100).",
+                    "default": 25,
+                },
+            },
+        },
+    },
+]
+
+
+def handle_tool_call(conn, tool_name, arguments):
+    """Dispatch a tool call and return the result text."""
+    if tool_name == "search_sessions":
+        query = arguments.get("query", "")
+        limit = min(arguments.get("limit", 5), 20)
+        try:
+            results = search_sessions(conn, query, limit)
+        except Exception:
+            results = []
+
+        if results:
+            return "\n\n---\n\n".join(
+                f"Session {r['id']} (depth {r['depth']}, {r['created_at']}):\n"
+                f"{r['summary_xml']}"
+                for r in results
+            )
+        return "No matching sessions found."
+
+    elif tool_name == "search_sessions_by_id":
+        session_id = arguments.get("session_id", "")
+        try:
+            session = get_session_by_id(conn, session_id)
+        except Exception:
+            session = None
+
+        if session:
+            return (
+                f"Session {session['id']} (depth {session['depth']}, "
+                f"{session['created_at']}):\n{session['summary_xml']}"
+            )
+        return f"No session found with ID: {session_id}"
+
+    elif tool_name == "list_session_catalog":
+        topic = arguments.get("topic_filter")
+        tools = arguments.get("tools_filter")
+        limit = min(arguments.get("limit", 25), 100)
+        try:
+            rows = list_session_catalog(
+                conn, topic_filter=topic, tools_filter=tools, limit=limit
+            )
+        except Exception:
+            rows = []
+
+        if rows:
+            lines = []
+            for r in rows:
+                lines.append(
+                    f"{r['id'][:8]}... | {r.get('created_at', '')[:10]} | "
+                    f"topic={r.get('topic', '')} subtopic={r.get('subtopic', '')} | "
+                    f"tools={r.get('tools', '')} | keywords={r.get('keywords', '')}"
+                )
+            return "\n".join(lines)
+        return "No sessions found matching filters."
+
+    return f"Unknown tool: {tool_name}"
+
+
 def main():
     db_path = os.environ.get("SESSIONS_DB", "")
     if db_path:
@@ -70,7 +204,7 @@ def main():
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "sessions-search", "version": "1.0.0"},
+                    "serverInfo": {"name": "sessions-search", "version": "2.0.0"},
                 },
             })
 
@@ -81,34 +215,7 @@ def main():
             write_message({
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {
-                    "tools": [
-                        {
-                            "name": "search_sessions",
-                            "description": (
-                                "Search past session summaries for historical context. "
-                                "Use when the current session summary doesn't contain "
-                                "information you need, or when the user references past "
-                                "work not in your current state."
-                            ),
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "query": {
-                                        "type": "string",
-                                        "description": "Natural language search query.",
-                                    },
-                                    "limit": {
-                                        "type": "integer",
-                                        "description": "Maximum results to return (default 5).",
-                                        "default": 5,
-                                    },
-                                },
-                                "required": ["query"],
-                            },
-                        }
-                    ],
-                },
+                "result": {"tools": TOOLS},
             })
 
         elif method == "tools/call":
@@ -116,36 +223,15 @@ def main():
             tool_name = params.get("name", "")
             arguments = params.get("arguments", {})
 
-            if tool_name == "search_sessions":
-                query = arguments.get("query", "")
-                limit = min(arguments.get("limit", 5), 20)
-                try:
-                    results = search_sessions(conn, query, limit)
-                except Exception:
-                    results = []
+            text = handle_tool_call(conn, tool_name, arguments)
 
-                if results:
-                    text = "\n\n---\n\n".join(
-                        f"Session {r['id']} (depth {r['depth']}, {r['created_at']}):\n"
-                        f"{r['summary_xml']}"
-                        for r in results
-                    )
-                else:
-                    text = "No matching sessions found."
-
-                write_message({
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "result": {
-                        "content": [{"type": "text", "text": text}],
-                    },
-                })
-            else:
-                write_message({
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
-                })
+            write_message({
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "result": {
+                    "content": [{"type": "text", "text": text}],
+                },
+            })
 
         elif msg_id is not None:
             # Unknown method with an ID — return error

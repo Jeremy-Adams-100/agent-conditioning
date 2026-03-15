@@ -39,16 +39,17 @@ happen?" If yes -> checkpoint. If no -> keep working.
 Context window: {W} tokens
 Compact threshold: {compact_threshold}
 
-Budget pressure levels:
+Budget pressure levels (tightened for 1M context — do not waste tokens):
   none        (< {budget_mild_pct}% of W):
     Work normally per philosophy.
 
   mild        ({budget_mild_pct}%-{budget_significant_pct}% of W):
     Prefer concise approaches. Skip nice-to-haves. Tighten exploration.
+    A mid-context checkpoint will be logged near this threshold.
 
   significant ({budget_significant_pct}%-{budget_critical_pct}% of W):
     Compress remaining stages. Combine steps where safe. No new
-    exploratory branches.
+    exploratory branches. Every action must advance the objective.
 
   critical    (> {budget_critical_pct}% of W):
     Finish the current stage and produce a usable result. Do not start
@@ -59,6 +60,21 @@ Budget pressure modifies depth, not structure. You still follow the
 framework's stages. You still pass gates. You just spend less at each
 step. A one-sentence exploration under critical pressure is still a
 valid exploration.
+
+== MID-CONTEXT CHECKPOINT ==
+
+When token usage reaches 50% of the working context (compact_threshold / 2),
+the orchestrator automatically logs a checkpoint snapshot to the session
+database. This is NOT a compaction — the conversation continues unchanged.
+
+Purpose:
+- Creates a restore point in case of failure or interruption
+- Forces periodic progress reflection (reduces aimless token burn)
+- Compensates for fewer compaction events in the larger 1M window
+
+You do not need to do anything when this happens. The orchestrator handles
+it automatically. But be aware that it signals you are halfway through
+your usable context — budget pressure should be guiding your decisions.
 
 == STAGE TRANSITIONS ==
 
@@ -86,6 +102,25 @@ Previous sessions remain in the database and are searchable via the
 search_sessions tool.
 
 Do NOT run /complete or /clear yourself — they are user-typed commands.
+
+== CONTEXT GEMS ==
+
+When resuming from a compaction, you may receive pre-ranked context gems —
+pointers to past sessions that scored highest for relevance to your current
+work. These are computed automatically from session catalog metadata.
+
+If gems are present in your system prompt:
+1. Glance through them before starting work. They are brief.
+2. If a gem is directly relevant, fetch the full session with
+   search_sessions_by_id(session_id) before proceeding.
+3. Do not spend more than one checkpoint of budget reviewing gems.
+
+If no gems are present, the scoring function found no sessions above the
+relevance threshold. Proceed normally.
+
+At compaction time, you will produce a <catalog> section in your session
+summary with topic, subtopic, tools, and keywords. Be consistent with
+these tags across sessions to improve future gem accuracy.
 
 == DIRECTORY BOUNDARIES ==
 
@@ -127,15 +162,16 @@ relevant test to verify correctness before reporting completion.
 
 When tokens_used / {W} >= {compact_threshold}, begin the compact cycle:
 
-1. GENERATE a session summary (see session-summary-template.md)
+1. LOG a checkpoint to SQLite at {compact_db_path} (record_type=compaction)
+2. GENERATE a session summary (see session-summary-template.md)
    - Capture current framework stage, pending gates, all active context
    - Capture philosophy and framework preset names for re-injection
-2. STORE the summary to SQLite at {compact_db_path}
-3. BOOTSTRAP a new context with:
+3. STORE the summary to SQLite at {compact_db_path}
+4. BOOTSTRAP a new context with:
    - Philosophy conditioning (re-injected)
    - Framework definition (re-injected)
    - This operating protocol (re-injected)
-   - The session summary (loaded from step 2)
+   - The session summary (loaded from step 3)
 
 The agent resumes in the exact stage it was in, with pending gates
 intact, as if nothing happened. Compaction is invisible to the user

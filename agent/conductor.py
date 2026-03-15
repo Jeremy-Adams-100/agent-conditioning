@@ -356,7 +356,7 @@ def run_agent(
         envelope = call_claude(
             prompt=user_prompt,
             system_prompt=system_prompt,
-            model=agent_config.get("model", "sonnet"),
+            model=agent_config.get("model", "opus"),
             timeout=agent_config.get("cli_timeout", 0),
             disable_tools=agent_def.get("disable_tools", False),
             mcp_config=mcp_config,

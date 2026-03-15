@@ -28,9 +28,15 @@ from prompt_toolkit.key_binding import KeyBindings
 
 from auto_compact.db import (
     count_sessions,
+    get_all_sessions_with_catalog,
     get_latest_session,
     init_db,
     store_session,
+)
+from auto_compact.proximity import (
+    extract_catalog_from_xml,
+    format_gems_xml,
+    rank_sessions,
 )
 
 # ---------------------------------------------------------------------------
@@ -77,7 +83,7 @@ PHILOSOPHY_PRESETS = {
             "someone needs more context, the code should speak for itself."
         ),
         "discomfort_signal": (
-            "You should feel mild discomfort any time you produce more than ~500 tokens\n"
+            "You should feel mild discomfort any time you produce more than ~2000 tokens\n"
             "of reasoning without a concrete output. That discomfort means you are\n"
             "over-thinking. Act."
         ),
@@ -92,7 +98,7 @@ PHILOSOPHY_PRESETS = {
         "quality": "high",
         "complexity": "medium",
         "voice": (
-            "You are a careful engineer preparing work for peer review. Your\n"
+            "You are a careful professional preparing work for peer review. Your\n"
             "reputation depends on the quality of what you produce. You take pride\n"
             "in getting things right the first time and leaving clean trails for\n"
             "whoever works on this next."
@@ -129,8 +135,8 @@ PHILOSOPHY_PRESETS = {
         ),
         "token_guidance": (
             "Token budget is generous. Spend it on depth and correctness, not on\n"
-            "verbosity. A thorough exploration that costs 5k tokens is better than\n"
-            "a shallow one that costs 1k. But never repeat yourself — say it once,\n"
+            "verbosity. A thorough exploration that costs 5000 tokens is better than\n"
+            "a shallow one that costs 1000. But never repeat yourself — say it once,\n"
             "well."
         ),
     },
@@ -949,6 +955,45 @@ FRAMEWORK_PRESETS = {
 }
 
 # ---------------------------------------------------------------------------
+# Default relevance profiles (keyed by philosophy name)
+# ---------------------------------------------------------------------------
+
+DEFAULT_RELEVANCE_PROFILES = {
+    "efficient": {
+        "topic_weights": {"_same_topic": 1.0, "_same_subtopic": 0.5, "testing": -0.3},
+        "tool_weights": {"_shared_tools": 0.3},
+        "keyword_weights": {"breaking_change": 0.4, "constraint": 0.3, "silent_failure": 0.3},
+    },
+    "thorough": {
+        "topic_weights": {"_same_topic": 1.0, "_same_subtopic": 0.5},
+        "tool_weights": {"_shared_tools": 0.3},
+        "keyword_weights": {"design_decision": 0.4, "constraint": 0.4, "rejected_approach": 0.3, "breaking_change": 0.3},
+    },
+    "research": {
+        "topic_weights": {"_same_topic": 0.8, "_same_subtopic": 0.4, "_any_topic": 0.1},
+        "tool_weights": {"_shared_tools": 0.4},
+        "keyword_weights": {"constraint": 0.5, "rejected_approach": 0.5, "dead_end": 0.4, "surprising": 0.3},
+    },
+    "audit": {
+        "topic_weights": {"_same_topic": 1.0, "_same_subtopic": 0.6},
+        "tool_weights": {"_shared_tools": 0.3},
+        "keyword_weights": {"bug": 0.5, "silent_failure": 0.5, "regression": 0.4, "race_condition": 0.4, "breaking_change": 0.3},
+    },
+    "prompt": {
+        "topic_weights": {"_same_topic": 0.6, "_same_subtopic": 0.3},
+        "tool_weights": {"_shared_tools": 0.1},
+        "keyword_weights": {"constraint": 0.3, "requirement": 0.3},
+    },
+}
+
+DEFAULT_CONTEXT_PROXIMITY = {
+    "enabled": True,
+    "max_gems": 7,
+    "min_score": 0.3,
+}
+
+
+# ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
 
@@ -961,9 +1006,9 @@ def load_config(path: str | Path | None = None) -> dict:
 
     defaults = {
         "model": "opus",
-        "context_window": 200_000,
+        "context_window": 1_000_000,
         "model_tier": "opus",
-        "compact_threshold": 0.80,
+        "compact_threshold": 0.90,
         "compact_db": "./data/sessions.db",
         "max_summary_pct": 0.15,
         "depth_compression": "gentle",
@@ -976,6 +1021,8 @@ def load_config(path: str | Path | None = None) -> dict:
         "working_directory": "",
         "allowed_tools": ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "WebSearch"],
         "cli_timeout": 0,
+        "context_proximity": dict(DEFAULT_CONTEXT_PROXIMITY),
+        "relevance_profiles": dict(DEFAULT_RELEVANCE_PROFILES),
     }
     for key, default in defaults.items():
         config.setdefault(key, default)
@@ -1157,7 +1204,12 @@ def extract_current_stage(summary_xml: str) -> str:
     return "unknown"
 
 
-def assemble_system_prompt(config: dict, session_summary: dict | None = None, role: str | None = None) -> str:
+def assemble_system_prompt(
+    config: dict,
+    session_summary: dict | None = None,
+    role: str | None = None,
+    gems_xml: str | None = None,
+) -> str:
     """Build the full system prompt from templates and config."""
     prompt_parts = []
 
@@ -1197,7 +1249,7 @@ def assemble_system_prompt(config: dict, session_summary: dict | None = None, ro
     # --- Layer 3: Operating Protocol ---
     protocol_template = (TEMPLATES_DIR / "operating-protocol-template.md").read_text()
 
-    budget_thresholds = {"none": 0.0, "mild": 0.5, "significant": 0.75, "critical": 0.9}
+    budget_thresholds = {"none": 0.0, "mild": 0.40, "significant": 0.60, "critical": 0.80}
 
     protocol_vars = {
         "W": str(config["context_window"]),
@@ -1245,18 +1297,38 @@ def assemble_system_prompt(config: dict, session_summary: dict | None = None, ro
 
         prompt_parts.append(fill_simple_vars(summary_template, summary_vars))
 
-    # --- Layer 5: Tool Definitions ---
+    # --- Layer 5: Context Gems (only if provided) ---
+    if gems_xml:
+        gem_instructions = (
+            "[CONTEXT GEMS]\n\n"
+            "Context gems are pre-ranked pointers to past sessions that are likely\n"
+            "relevant to your current work. Before starting:\n\n"
+            "1. Read the gems. They are brief — this takes seconds.\n"
+            "2. If a gem is directly relevant to your current task, fetch the full\n"
+            "   session with search_sessions_by_id(session_id) before proceeding.\n"
+            "3. If no gems seem relevant, proceed normally. They are guidance,\n"
+            "   not requirements.\n"
+            "4. Do not spend more than one checkpoint worth of budget reviewing\n"
+            "   gems. Glance, note what's useful, move on.\n\n"
+            f"{gems_xml}"
+        )
+        prompt_parts.append(gem_instructions)
+
+    # --- Layer 6: Tool Definitions ---
     prompt_parts.append(
-        "[AVAILABLE TOOL]\n\n"
-        "You have access to a tool called `search_sessions` that searches\n"
-        "past session summaries for historical context.\n\n"
-        "Use it when:\n"
-        "- The current session summary doesn't contain information you need\n"
-        "- The user references past work not in your current state\n"
-        "- You need to find context from earlier compactions\n\n"
-        "Parameters:\n"
-        '  query (string, required): Natural language search query\n'
-        "  limit (integer, optional, default 5): Max results (1-20)"
+        "[AVAILABLE TOOLS]\n\n"
+        "You have access to session history tools:\n\n"
+        "1. search_sessions(query, limit)\n"
+        "   Search past session summaries by content (FTS).\n"
+        "   Parameters: query (string, required), limit (integer, optional, default 5, max 20)\n\n"
+        "2. search_sessions_by_id(session_id)\n"
+        "   Retrieve a specific session's full summary by ID.\n"
+        "   Use this to get full context for a session found via gems or the catalog.\n"
+        "   Parameters: session_id (string, required)\n\n"
+        "3. list_session_catalog(topic_filter, tools_filter, limit)\n"
+        "   Browse session metadata (topic, subtopic, tools, keywords).\n"
+        "   All parameters optional. Useful for discovering what sessions exist.\n"
+        "   Parameters: topic_filter (string), tools_filter (string), limit (integer, default 25)"
     )
 
     return "\n\n".join(prompt_parts)
@@ -1338,6 +1410,13 @@ Schema to follow:
       <question>{{question}}</question>
     </open_questions>
   </plan>
+
+  <catalog>
+    <topic>{{broad domain area}}</topic>
+    <subtopic>{{specific focus within the topic}}</subtopic>
+    <tools>{{tools, libraries, APIs, or system components central to this session}}</tools>
+    <keywords>{{3-5 freeform terms for search matching}}</keywords>
+  </catalog>
 </session_summary>
 
 Compression rules:
@@ -1372,7 +1451,18 @@ Critical instructions:
    agent make a mistake or waste significant time re-deriving it?"
    If no, cut it.
 
-6. Produce ONLY the XML. No preamble, no explanation, no markdown
+6. In the <catalog> section, tag this session with:
+   - topic: Broad domain area. Lowercase, underscore-separated. Single most
+     accurate term. Examples: api_client, auth, database, deployment, testing.
+   - subtopic: Specific focus within that domain. Same format.
+     Examples: retry_logic, oauth_flow, connection_pooling, schema_design.
+   - tools: Comma-separated canonical names of tools, libraries, frameworks,
+     APIs central to this session. Only include tools actually used.
+   - keywords: 3-5 freeform terms capturing the nature of the work.
+   Be consistent. Use the same topic/subtopic terms across sessions
+   when working in the same area.
+
+7. Produce ONLY the XML. No preamble, no explanation, no markdown
    fencing."""
 
 
@@ -1469,7 +1559,7 @@ class ClaudeCliError(Exception):
 def call_claude(
     prompt: str,
     system_prompt: str,
-    model: str = "sonnet",
+    model: str = "opus",
     timeout: int = 0,
     disable_tools: bool = False,
     mcp_config: str | None = None,
@@ -1612,8 +1702,61 @@ def build_allowed_tools_flags(config: dict, include_mcp: bool = True) -> list[st
 
     if include_mcp:
         flags.extend(["--allowedTools", "mcp__sessions__search_sessions"])
+        flags.extend(["--allowedTools", "mcp__sessions__search_sessions_by_id"])
+        flags.extend(["--allowedTools", "mcp__sessions__list_session_catalog"])
 
     return flags
+
+
+# ---------------------------------------------------------------------------
+# Context proximity (gem computation)
+# ---------------------------------------------------------------------------
+
+
+def _compute_gems(
+    config: dict,
+    conn,
+    current_catalog: dict | None = None,
+    exclude_id: str | None = None,
+) -> str | None:
+    """Compute context gems for system prompt injection.
+
+    Returns formatted gems XML string, or None if disabled / no results.
+    """
+    prox = config.get("context_proximity", {})
+    if not prox.get("enabled", True):
+        return None
+
+    if not current_catalog:
+        return None
+
+    # Get the relevance profile for the current philosophy
+    profiles = config.get("relevance_profiles", DEFAULT_RELEVANCE_PROFILES)
+    philosophy = config.get("philosophy", "efficient")
+    profile = profiles.get(philosophy, profiles.get("efficient", {}))
+
+    if not profile:
+        return None
+
+    # Get all sessions with catalog data
+    all_sessions = get_all_sessions_with_catalog(conn)
+    if not all_sessions:
+        return None
+
+    max_gems = prox.get("max_gems", 7)
+    min_score = prox.get("min_score", 0.3)
+
+    ranked = rank_sessions(
+        all_sessions, profile, current_catalog,
+        max_gems=max_gems, min_score=min_score,
+        exclude_id=exclude_id,
+    )
+
+    if not ranked:
+        return None
+
+    gems_xml = format_gems_xml(ranked)
+    return gems_xml if gems_xml else None
 
 
 # ---------------------------------------------------------------------------
@@ -1673,7 +1816,10 @@ def compact_with_conditioning(
 
     token_est = estimate_tokens(summary_xml)
 
-    # Store via auto_compact's db layer (with conditioning metadata)
+    # Extract catalog metadata from generated summary
+    catalog = extract_catalog_from_xml(summary_xml)
+
+    # Store via auto_compact's db layer (with conditioning metadata + catalog)
     store_session(
         conn,
         session_id=session_id,
@@ -1684,6 +1830,8 @@ def compact_with_conditioning(
         philosophy=config["philosophy"],
         framework=config["framework"],
         token_estimate=token_est,
+        record_type="compaction",
+        **catalog,
     )
 
     session_count = count_sessions(conn)
@@ -1705,11 +1853,83 @@ def compact_with_conditioning(
         "session_count": session_count,
     }
 
-    new_system_prompt = assemble_system_prompt(config, new_session)
+    # Compute context gems for the new session
+    gems_xml = _compute_gems(config, conn, current_catalog=catalog, exclude_id=session_id)
+
+    new_system_prompt = assemble_system_prompt(config, new_session, gems_xml=gems_xml)
     new_conversation = []  # Fresh — all context is in the system prompt now
     new_parent_id = session_id
 
     return new_system_prompt, new_conversation, new_depth, new_parent_id
+
+
+def checkpoint_without_compaction(
+    config: dict,
+    conn,
+    conversation: list[dict],
+    current_depth: int,
+    current_parent_id: str | None,
+    tokens_at_checkpoint: int,
+) -> str:
+    """Log a mid-context checkpoint to sessions.db WITHOUT resetting context.
+
+    Generates a summary snapshot at the current point and stores it as a
+    checkpoint record. The conversation continues unchanged.
+
+    Returns the checkpoint session_id.
+    """
+    session_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    summary_prompt = build_summary_system_prompt(
+        config, session_id, current_depth, current_parent_id, timestamp,
+        tokens_at_checkpoint,
+    )
+
+    print("\n[ORCHESTRATOR] Mid-context checkpoint — generating snapshot...")
+
+    conversation_text = format_conversation_as_text(conversation)
+
+    envelope = call_claude(
+        prompt=f"Summarize the following conversation for context continuity:\n\n{conversation_text}",
+        system_prompt=summary_prompt,
+        model=config["model"],
+        timeout=config.get("cli_timeout", 0),
+        disable_tools=True,
+    )
+
+    summary_xml = envelope.get("result", "").strip()
+
+    if summary_xml.startswith("```"):
+        lines = summary_xml.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        summary_xml = "\n".join(lines)
+
+    token_est = estimate_tokens(summary_xml)
+
+    # Extract catalog metadata from checkpoint summary
+    catalog = extract_catalog_from_xml(summary_xml)
+
+    store_session(
+        conn,
+        session_id=session_id,
+        parent_id=current_parent_id,
+        depth=current_depth,  # Same depth — no compaction happened
+        timestamp=timestamp,
+        summary_xml=summary_xml,
+        philosophy=config["philosophy"],
+        framework=config["framework"],
+        token_estimate=token_est,
+        record_type="checkpoint",
+        **catalog,
+    )
+
+    print(f"[ORCHESTRATOR] Checkpoint {session_id[:8]}... logged (~{token_est} tokens). Continuing.")
+
+    return session_id
 
 
 def _save_session_on_exit(
@@ -1749,6 +1969,7 @@ def run_loop(
 ) -> None:
     """Run the main conversation loop via Claude CLI."""
     conversation: list[dict] = []
+    checkpoint_logged = False  # Reset after each compaction
     permission_flags = build_allowed_tools_flags(config)
     # Multiline prompt: pasted newlines are preserved, typed Enter submits.
     prompt_bindings = KeyBindings()
@@ -1769,7 +1990,11 @@ def run_loop(
     print(f"  Philosophy: {config['philosophy']}")
     print(f"  Framework: {config['framework']}")
     print(f"  Context window: {config['context_window']:,} tokens")
-    print(f"  Compact threshold: {config['compact_threshold'] * 100:.0f}%")
+    checkpoint_threshold = config["compact_threshold"] / 2  # 50% of working context
+    working_context = int(config["context_window"] * config["compact_threshold"])
+    checkpoint_at = int(config["context_window"] * checkpoint_threshold)
+    print(f"  Compact at: {config['compact_threshold'] * 100:.0f}% ({working_context:,} tokens)")
+    print(f"  Checkpoint at: {checkpoint_threshold * 100:.0f}% ({checkpoint_at:,} tokens)")
     wd = config.get("working_directory", "")
     if wd:
         print(f"  Working directory: {wd}")
@@ -1807,6 +2032,7 @@ def run_loop(
             conversation = []
             depth = 0
             parent_id = None
+            checkpoint_logged = False
             print("[ORCHESTRATOR] Context cleared. Starting fresh session (previous sessions still searchable).")
             continue
 
@@ -1817,6 +2043,7 @@ def run_loop(
                 config, conn, conversation, depth, parent_id,
                 tokens_at_compact=int(config["context_window"] * config["compact_threshold"]),
             )
+            checkpoint_logged = False
             print(f"[Compacted. New depth: {depth}]")
             continue
 
@@ -1866,10 +2093,22 @@ def run_loop(
         if ratio >= config["compact_threshold"]:
             print(f"\n[ORCHESTRATOR] Token usage: {total_tokens:,} / {config['context_window']:,} "
                   f"({ratio:.1%}) — threshold {config['compact_threshold']:.0%} reached.")
+            print("[ORCHESTRATOR] Logging checkpoint and compacting...")
             system_prompt, conversation, depth, parent_id = compact_with_conditioning(
                 config, conn, conversation, depth, parent_id, total_tokens
             )
-        elif ratio >= 0.5:
+            checkpoint_logged = False  # Reset for next cycle
+        elif ratio >= checkpoint_threshold and not checkpoint_logged:
+            print(f"\n[ORCHESTRATOR] Token usage: {total_tokens:,} / {config['context_window']:,} "
+                  f"({ratio:.1%}) — mid-context checkpoint threshold reached.")
+            try:
+                checkpoint_without_compaction(
+                    config, conn, conversation, depth, parent_id, total_tokens
+                )
+                checkpoint_logged = True
+            except Exception as cp_err:
+                print(f"[ORCHESTRATOR] Checkpoint failed: {cp_err}")
+        elif ratio >= 0.3:
             print(f"[tokens: ~{total_tokens // 1000}k / {config['context_window'] // 1000}k ({ratio:.0%})]")
 
 
@@ -1889,7 +2128,14 @@ def main():
 
     if latest_session is not None:
         latest_session["session_count"] = count_sessions(conn)
-        system_prompt = assemble_system_prompt(config, latest_session)
+        # Build current catalog from latest session for gem scoring
+        current_catalog = {
+            k: latest_session[k] for k in ("topic", "subtopic", "tools", "keywords")
+            if latest_session.get(k)
+        }
+        gems_xml = _compute_gems(config, conn, current_catalog=current_catalog,
+                                 exclude_id=latest_session["id"])
+        system_prompt = assemble_system_prompt(config, latest_session, gems_xml=gems_xml)
         depth = latest_session["depth"] + 1
         parent_id = latest_session["id"]
     else:

@@ -2,12 +2,12 @@
 
 # === Model ===
 model: opus                          # alias (sonnet, opus, haiku) or full name
-context_window: 200000
+context_window: 1000000
 model_tier: opus
 cli_timeout: 0                       # seconds per claude -p call (0 = no timeout)
 
 # === Compact ===
-compact_threshold: 0.80
+compact_threshold: 0.90
 compact_db: ./data/sessions.db
 max_summary_pct: 0.15
 depth_compression: gentle
@@ -46,3 +46,78 @@ allowed_tools:
   - Grep
   - Bash
   - WebSearch
+
+# === Context Proximity ===
+# Pre-ranks past sessions and injects the most relevant as "gems"
+# into each agent's system prompt at bootstrap.
+context_proximity:
+  enabled: true
+  max_gems: 7                        # top N sessions to inject
+  min_score: 0.3                     # ignore sessions below this score
+
+# Relevance profiles keyed by philosophy name.
+# Each profile defines how sessions are scored for that agent type.
+# _same_topic / _same_subtopic: matched against the current session's catalog.
+# _shared_tools: additive per shared tool.
+# _any_topic: base score for all sessions (useful for research agents).
+# Named topics/keywords: direct boost or penalty.
+relevance_profiles:
+  efficient:
+    topic_weights:
+      _same_topic: 1.0
+      _same_subtopic: 0.5
+      testing: -0.3
+    tool_weights:
+      _shared_tools: 0.3
+    keyword_weights:
+      breaking_change: 0.4
+      constraint: 0.3
+      silent_failure: 0.3
+
+  thorough:
+    topic_weights:
+      _same_topic: 1.0
+      _same_subtopic: 0.5
+    tool_weights:
+      _shared_tools: 0.3
+    keyword_weights:
+      design_decision: 0.4
+      constraint: 0.4
+      rejected_approach: 0.3
+      breaking_change: 0.3
+
+  research:
+    topic_weights:
+      _same_topic: 0.8
+      _same_subtopic: 0.4
+      _any_topic: 0.1
+    tool_weights:
+      _shared_tools: 0.4
+    keyword_weights:
+      constraint: 0.5
+      rejected_approach: 0.5
+      dead_end: 0.4
+      surprising: 0.3
+
+  audit:
+    topic_weights:
+      _same_topic: 1.0
+      _same_subtopic: 0.6
+    tool_weights:
+      _shared_tools: 0.3
+    keyword_weights:
+      bug: 0.5
+      silent_failure: 0.5
+      regression: 0.4
+      race_condition: 0.4
+      breaking_change: 0.3
+
+  prompt:
+    topic_weights:
+      _same_topic: 0.6
+      _same_subtopic: 0.3
+    tool_weights:
+      _shared_tools: 0.1
+    keyword_weights:
+      constraint: 0.3
+      requirement: 0.3
