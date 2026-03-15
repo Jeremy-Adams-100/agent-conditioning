@@ -160,12 +160,18 @@ def _excerpt(text: str, max_chars: int = 500) -> str:
 
 
 def adaptive_cooldown(base_seconds: int, recent_failure_cycles: int) -> int:
+    """Cooldown between cycles. On failure streaks, back off hard.
+
+    0 failures: base cooldown (from config)
+    1-2 failures: 60s
+    3+ failures: 10min (likely an outage, don't keep hammering)
+    """
     if recent_failure_cycles == 0:
         return base_seconds
     elif recent_failure_cycles <= 2:
-        return max(base_seconds, 10) * 2
+        return 60
     else:
-        return max(base_seconds, 10) * 5
+        return 600
 
 
 def _sleep_interruptible(seconds: int) -> None:
