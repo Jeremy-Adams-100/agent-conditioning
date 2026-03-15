@@ -355,10 +355,10 @@ def run_exploration(
         if total_failure_streak >= 3:
             print(
                 f"\n[exploration] WARNING: {total_failure_streak} consecutive "
-                f"cycles with failures. Pausing 120s.",
+                f"cycles with failures. Pausing 60s.",
                 flush=True,
             )
-            _sleep_interruptible(120)
+            _sleep_interruptible(60)
 
         # Write reports
         if report_every:
