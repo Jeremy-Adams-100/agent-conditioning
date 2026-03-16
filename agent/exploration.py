@@ -6,9 +6,9 @@ stopped via Ctrl+C or max_cycles reached. Each agent maintains a
 persistent Claude Code session via --session-id / --resume, giving
 continuous context across cycles without clearing.
 
-Each agent's output is stored in sessions.db as the single source of
-truth. A simple status file (exploration_status.md) is overwritten
-each cycle with deterministic data (cycle count, failures, status).
+Auto-compact integration: when an agent's context exceeds the compact
+threshold, the session is compacted (summary generated, stored in
+sessions.db, fresh session created with summary as bootstrap).
 
 Usage:
     python -m agent.exploration exploration-score.yaml
@@ -84,7 +84,8 @@ def load_exploration_score(path: str | Path) -> dict:
 
 def save_state(path: Path, cycle: int, results: dict, failures: dict,
                last_session_id: str | None = None,
-               agent_sessions: dict | None = None) -> None:
+               agent_sessions: dict | None = None,
+               agent_summaries: dict | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     state = {
         "cycle": cycle,
@@ -92,6 +93,7 @@ def save_state(path: Path, cycle: int, results: dict, failures: dict,
         "failures": failures,
         "last_session_id": last_session_id,
         "agent_sessions": agent_sessions or {},
+        "agent_summaries": agent_summaries or {},
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     path.write_text(json.dumps(state, indent=2, default=str))
@@ -107,8 +109,41 @@ def load_state(path: Path) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Token usage helpers
+# ---------------------------------------------------------------------------
+
+
+def _total_context_tokens(usage: dict) -> int:
+    """Compute total context from usage envelope (includes cached tokens)."""
+    return (
+        usage.get("input_tokens", 0)
+        + usage.get("cache_read_input_tokens", 0)
+        + usage.get("cache_creation_input_tokens", 0)
+        + usage.get("output_tokens", 0)
+    )
+
+
+# ---------------------------------------------------------------------------
 # Claude CLI with session persistence
 # ---------------------------------------------------------------------------
+
+
+COMPACTION_PROMPT = """\
+[CONTEXT COMPACTION — do NOT produce your normal output format]
+
+Your context window is approaching its limit. Produce a summary of \
+everything you know and have done so far. This summary will bootstrap \
+your context in a fresh session.
+
+Include:
+- Current state of the exploration (sub-topics explored, what's pending)
+- Key findings, decisions, and their rationale
+- Important constraints or issues discovered
+- What you were working on and what should happen next
+- Any critical facts that would be lost without this summary
+
+Be thorough but concise. Write in plain text or markdown. \
+Do NOT use [OUTPUT:] markers."""
 
 
 def _call_exploration_agent(
@@ -119,11 +154,13 @@ def _call_exploration_agent(
     results: dict,
     score_inputs: dict,
     agent_sessions: dict,
+    agent_summaries: dict,
 ) -> dict:
     """Call an agent with persistent session context.
 
     First call (no session): creates session via --session-id, sets system prompt.
     Subsequent calls: resumes session via --resume (context preserved).
+    Post-compaction: creates new session with summary appended to system prompt.
 
     Returns dict matching run_agent() format:
         {status, outputs, usage, duration_ms, error}
@@ -162,6 +199,17 @@ def _call_exploration_agent(
             outputs=agent_def.get("outputs", []),
         )
         system_prompt = assemble_system_prompt(agent_config, role=role_block)
+
+        # If resuming after compaction, append the summary
+        summary = agent_summaries.pop(agent_name, None)
+        if summary:
+            system_prompt += (
+                "\n\n[RESTORED CONTEXT — compacted from previous session]\n\n"
+                + summary
+                + "\n\n[Continue from where you left off. "
+                "Do not re-do completed work.]"
+            )
+
         cmd.extend(["--system-prompt", system_prompt])
 
     # Permission flags
@@ -213,6 +261,103 @@ def _call_exploration_agent(
         "status": "ok",
         "error": None,
     }
+
+
+def _compact_agent_session(
+    agent_name: str,
+    agent_def: dict,
+    config: dict,
+    agent_sessions: dict,
+    agent_summaries: dict,
+    conn,
+    cycle: int,
+    last_session_id: str | None,
+) -> str | None:
+    """Compact an agent's session: generate summary, store, reset session.
+
+    Resumes the old session with a compaction prompt to extract a summary.
+    Stores the summary in sessions.db. Deletes the old session UUID so the
+    next call creates a fresh session bootstrapped with the summary.
+
+    Returns the new last_session_id, or the original on failure.
+    """
+    old_session_id = agent_sessions.get(agent_name)
+    if not old_session_id:
+        return last_session_id
+
+    agent_config = build_agent_config(config, agent_def)
+
+    cmd = [
+        "claude", "-p",
+        "--output-format", "json",
+        "--model", agent_config.get("model", "opus"),
+        "--resume", old_session_id,
+    ]
+
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=COMPACTION_PROMPT,
+            capture_output=True,
+            text=True,
+            timeout=agent_config.get("cli_timeout") or None,
+            cwd=agent_config.get("working_directory") or "/tmp",
+            env=env,
+        )
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"[exploration]   Compaction failed: {e}", flush=True)
+        return last_session_id
+
+    if proc.returncode != 0:
+        print(f"[exploration]   Compaction failed: {proc.stderr[:200]}", flush=True)
+        return last_session_id
+
+    try:
+        envelope = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        print("[exploration]   Compaction failed: bad JSON", flush=True)
+        return last_session_id
+
+    summary = envelope.get("result", "").strip()
+    if not summary:
+        print("[exploration]   Compaction produced empty summary", flush=True)
+        return last_session_id
+
+    # Store summary in sessions.db
+    session_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+    try:
+        store_session(
+            conn,
+            session_id=session_id,
+            parent_id=last_session_id,
+            depth=cycle,
+            timestamp=timestamp,
+            summary_xml=summary,
+            philosophy=agent_def.get("philosophy"),
+            framework=agent_def.get("framework"),
+            token_estimate=len(summary) // 4,
+            record_type="compaction",
+        )
+        last_session_id = session_id
+    except Exception as e:
+        print(f"[exploration]   Compaction DB write failed: {e}", flush=True)
+
+    # Reset session: delete old UUID, store summary for bootstrap
+    del agent_sessions[agent_name]
+    agent_summaries[agent_name] = summary
+
+    print(
+        f"[exploration]   {agent_name} compacted "
+        f"(~{len(summary)//4} tokens summary). "
+        f"Fresh session on next cycle.",
+        flush=True,
+    )
+
+    return last_session_id
 
 
 def _error_result(agent_name: str, agent_def: dict, error: str) -> dict:
@@ -363,6 +508,11 @@ def run_exploration(
     task = score["task"]
     score_inputs = {"directive": task}
 
+    # Compaction config
+    context_window = config.get("context_window", 1_000_000)
+    compact_threshold = config.get("compact_threshold", 0.90)
+    compact_at = int(context_window * compact_threshold)
+
     # Seed inputs
     seed = score.get("seed", {})
     if seed.get("starting_subtopic"):
@@ -376,6 +526,7 @@ def run_exploration(
         consecutive_failures = state.get("failures", {name: 0 for name in agents})
         last_session_id = state.get("last_session_id")
         agent_sessions = state.get("agent_sessions", {})
+        agent_summaries = state.get("agent_summaries", {})
         print(f"[exploration] Resuming from cycle {cycle}", flush=True)
         for name, sid in agent_sessions.items():
             print(f"[exploration]   {name} session: {sid[:8]}...", flush=True)
@@ -390,7 +541,8 @@ def run_exploration(
         cycle = 0
         consecutive_failures = {name: 0 for name in agents}
         last_session_id = None
-        agent_sessions = {}  # UUIDs created on first call per agent
+        agent_sessions = {}
+        agent_summaries = {}
         print("[exploration] Starting fresh exploration", flush=True)
 
     total_failure_streak = 0
@@ -399,6 +551,7 @@ def run_exploration(
     print(f"[exploration] Task: {task.strip()[:120]}", flush=True)
     print(f"[exploration] Flow: {' -> '.join(flow)}", flush=True)
     print(f"[exploration] Max cycles: {max_cycles or 'unlimited'}", flush=True)
+    print(f"[exploration] Compact at: {compact_at:,} tokens per agent", flush=True)
     print(f"[exploration] Cooldown: {base_cooldown}s | Ctrl+C to stop", flush=True)
     print("=" * 60, flush=True)
 
@@ -436,6 +589,7 @@ def run_exploration(
                 results=results,
                 score_inputs=score_inputs,
                 agent_sessions=agent_sessions,
+                agent_summaries=agent_summaries,
             )
 
             usage = result.get("usage", {})
@@ -444,23 +598,35 @@ def run_exploration(
             if result["status"] == "ok":
                 results.update(result["outputs"])
                 consecutive_failures[agent_name] = 0
-                # Report token usage including cached context
-                cache_read = usage.get("cache_read_input_tokens", 0)
-                cache_create = usage.get("cache_creation_input_tokens", 0)
-                input_tok = usage.get("input_tokens", 0)
-                total_ctx = input_tok + cache_read + cache_create
+
+                total_ctx = _total_context_tokens(usage)
                 print(
                     f"[exploration]   {agent_name}: ok "
-                    f"({dur:.1f}s, ctx:{total_ctx}tok, "
+                    f"({dur:.1f}s, ctx:{total_ctx:,}tok, "
                     f"out:{usage.get('output_tokens', 0)}tok)",
                     flush=True,
                 )
+
                 # Store output in sessions.db
                 output_text = "\n\n".join(result["outputs"].values())
                 last_session_id = _store_agent_output(
                     conn, agent_name, agent_def, output_text,
                     cycle, last_session_id,
                 )
+
+                # --- Auto-compact check ---
+                if total_ctx >= compact_at:
+                    print(
+                        f"[exploration]   {agent_name} context "
+                        f"{total_ctx:,}/{context_window:,} "
+                        f"({total_ctx/context_window:.0%}) — compacting...",
+                        flush=True,
+                    )
+                    last_session_id = _compact_agent_session(
+                        agent_name, agent_def, config,
+                        agent_sessions, agent_summaries,
+                        conn, cycle, last_session_id,
+                    )
             else:
                 # --- Failure handling ---
                 consecutive_failures[agent_name] += 1
@@ -524,7 +690,7 @@ def run_exploration(
         # Status file + state
         update_status_file(output_dir, cycle, "running", consecutive_failures)
         save_state(state_path, cycle, results, consecutive_failures,
-                   last_session_id, agent_sessions)
+                   last_session_id, agent_sessions, agent_summaries)
 
         elapsed = time.monotonic() - cycle_start
         print(f"[exploration] Cycle {cycle} done ({elapsed:.0f}s)", flush=True)
@@ -537,7 +703,7 @@ def run_exploration(
 
     # --- Stopped ---
     save_state(state_path, cycle, results, consecutive_failures,
-               last_session_id, agent_sessions)
+               last_session_id, agent_sessions, agent_summaries)
     update_status_file(output_dir, cycle, "stopped", consecutive_failures)
     conn.close()
     print(f"\n[exploration] Stopped after {cycle} cycles.", flush=True)
