@@ -2,8 +2,9 @@
 """Continuous Autonomous Exploration Conductor.
 
 Runs a sequential three-agent loop (research → worker → audit) until
-stopped via Ctrl+C or max_cycles reached. Each agent is a single-turn
-call_claude() invocation via the existing conductor.run_agent().
+stopped via Ctrl+C or max_cycles reached. Each agent maintains a
+persistent Claude Code session via --session-id / --resume, giving
+continuous context across cycles without clearing.
 
 Each agent's output is stored in sessions.db as the single source of
 truth. A simple status file (exploration_status.md) is overwritten
@@ -16,7 +17,9 @@ Usage:
 
 import argparse
 import json
+import os
 import signal
+import subprocess
 import time
 import uuid
 from datetime import datetime, timezone
@@ -24,8 +27,18 @@ from pathlib import Path
 
 import yaml
 
-from agent.conductor import run_agent
-from agent.orchestrator import load_config
+from agent.conductor import (
+    build_agent_config,
+    build_agent_prompt,
+    build_role_block,
+    parse_outputs,
+)
+from agent.orchestrator import (
+    assemble_system_prompt,
+    build_allowed_tools_flags,
+    generate_mcp_config,
+    load_config,
+)
 from auto_compact.db import init_db, store_session
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -50,8 +63,7 @@ signal.signal(signal.SIGTERM, _on_signal)
 
 
 # ---------------------------------------------------------------------------
-# Score loading (simpler than conductor's — no strict input validation
-# because inputs cycle across iterations)
+# Score loading
 # ---------------------------------------------------------------------------
 
 
@@ -71,13 +83,15 @@ def load_exploration_score(path: str | Path) -> dict:
 
 
 def save_state(path: Path, cycle: int, results: dict, failures: dict,
-               last_session_id: str | None = None) -> None:
+               last_session_id: str | None = None,
+               agent_sessions: dict | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     state = {
         "cycle": cycle,
         "results": results,
         "failures": failures,
         "last_session_id": last_session_id,
+        "agent_sessions": agent_sessions or {},
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     path.write_text(json.dumps(state, indent=2, default=str))
@@ -90,6 +104,128 @@ def load_state(path: Path) -> dict | None:
         return json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
         return None
+
+
+# ---------------------------------------------------------------------------
+# Claude CLI with session persistence
+# ---------------------------------------------------------------------------
+
+
+def _call_exploration_agent(
+    agent_name: str,
+    agent_def: dict,
+    task: str,
+    config: dict,
+    results: dict,
+    score_inputs: dict,
+    agent_sessions: dict,
+) -> dict:
+    """Call an agent with persistent session context.
+
+    First call (no session): creates session via --session-id, sets system prompt.
+    Subsequent calls: resumes session via --resume (context preserved).
+
+    Returns dict matching run_agent() format:
+        {status, outputs, usage, duration_ms, error}
+    """
+    agent_config = build_agent_config(config, agent_def)
+
+    # Build user prompt (same format as conductor)
+    user_prompt = build_agent_prompt(
+        score_task=task,
+        step_agent_name=agent_name,
+        agent_def=agent_def,
+        results=results,
+        score_inputs=score_inputs,
+    )
+
+    # Base command
+    cmd = [
+        "claude", "-p",
+        "--output-format", "json",
+        "--model", agent_config.get("model", "opus"),
+    ]
+
+    # Session: create or resume
+    session_id = agent_sessions.get(agent_name)
+    if session_id:
+        cmd.extend(["--resume", session_id])
+    else:
+        session_id = str(uuid.uuid4())
+        agent_sessions[agent_name] = session_id
+        cmd.extend(["--session-id", session_id])
+
+        # System prompt only on first call — retained on resume
+        role_block = build_role_block(
+            role_text=agent_def.get("role", f"You are the {agent_name} agent."),
+            inputs=agent_def.get("inputs", []),
+            outputs=agent_def.get("outputs", []),
+        )
+        system_prompt = assemble_system_prompt(agent_config, role=role_block)
+        cmd.extend(["--system-prompt", system_prompt])
+
+    # Permission flags
+    perm_flags = build_allowed_tools_flags(agent_config, include_mcp=False)
+    if perm_flags:
+        cmd.extend(perm_flags)
+
+    # MCP config (session search tools)
+    if agent_def.get("mcp", False):
+        db_path = agent_config.get("compact_db", "")
+        if db_path:
+            cmd.extend(["--mcp-config", generate_mcp_config(db_path)])
+
+    # Execute
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=user_prompt,
+            capture_output=True,
+            text=True,
+            timeout=agent_config.get("cli_timeout") or None,
+            cwd=agent_config.get("working_directory") or "/tmp",
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return _error_result(agent_name, agent_def, "CLI timed out")
+
+    if proc.returncode != 0:
+        return _error_result(agent_name, agent_def, proc.stderr[:500])
+
+    try:
+        envelope = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return _error_result(agent_name, agent_def, "Failed to parse CLI JSON")
+
+    response_text = envelope.get("result", "")
+    expected_outputs = agent_def.get("outputs", [])
+    outputs = parse_outputs(response_text, expected_outputs)
+    usage = envelope.get("usage", {})
+
+    return {
+        "agent": agent_name,
+        "outputs": outputs,
+        "usage": usage,
+        "duration_ms": envelope.get("duration_ms", 0),
+        "status": "ok",
+        "error": None,
+    }
+
+
+def _error_result(agent_name: str, agent_def: dict, error: str) -> dict:
+    """Build a failure result dict."""
+    expected_outputs = agent_def.get("outputs", [])
+    return {
+        "agent": agent_name,
+        "outputs": {name: f"[FAILED: {agent_name}] {error}" for name in expected_outputs},
+        "usage": {},
+        "duration_ms": 0,
+        "status": "error",
+        "error": error,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +375,10 @@ def run_exploration(
         cycle = state["cycle"]
         consecutive_failures = state.get("failures", {name: 0 for name in agents})
         last_session_id = state.get("last_session_id")
+        agent_sessions = state.get("agent_sessions", {})
         print(f"[exploration] Resuming from cycle {cycle}", flush=True)
+        for name, sid in agent_sessions.items():
+            print(f"[exploration]   {name} session: {sid[:8]}...", flush=True)
     else:
         results = {
             "directive": task,
@@ -251,6 +390,7 @@ def run_exploration(
         cycle = 0
         consecutive_failures = {name: 0 for name in agents}
         last_session_id = None
+        agent_sessions = {}  # UUIDs created on first call per agent
         print("[exploration] Starting fresh exploration", flush=True)
 
     total_failure_streak = 0
@@ -280,15 +420,22 @@ def run_exploration(
                 break
 
             agent_def = agents[agent_name]
-            print(f"[exploration] Running: {agent_name}", flush=True)
+            is_resume = agent_name in agent_sessions
+            print(
+                f"[exploration] {'Resuming' if is_resume else 'Starting'}: "
+                f"{agent_name}"
+                f"{' (' + agent_sessions[agent_name][:8] + '...)' if is_resume else ''}",
+                flush=True,
+            )
 
-            result = run_agent(
+            result = _call_exploration_agent(
                 agent_name=agent_name,
                 agent_def=agent_def,
-                score_task=task,
-                base_config=config,
+                task=task,
+                config=config,
                 results=results,
                 score_inputs=score_inputs,
+                agent_sessions=agent_sessions,
             )
 
             usage = result.get("usage", {})
@@ -297,10 +444,15 @@ def run_exploration(
             if result["status"] == "ok":
                 results.update(result["outputs"])
                 consecutive_failures[agent_name] = 0
+                # Report token usage including cached context
+                cache_read = usage.get("cache_read_input_tokens", 0)
+                cache_create = usage.get("cache_creation_input_tokens", 0)
+                input_tok = usage.get("input_tokens", 0)
+                total_ctx = input_tok + cache_read + cache_create
                 print(
                     f"[exploration]   {agent_name}: ok "
-                    f"({dur:.1f}s, {usage.get('input_tokens',0)}in/"
-                    f"{usage.get('output_tokens',0)}out)",
+                    f"({dur:.1f}s, ctx:{total_ctx}tok, "
+                    f"out:{usage.get('output_tokens', 0)}tok)",
                     flush=True,
                 )
                 # Store output in sessions.db
@@ -371,7 +523,8 @@ def run_exploration(
 
         # Status file + state
         update_status_file(output_dir, cycle, "running", consecutive_failures)
-        save_state(state_path, cycle, results, consecutive_failures, last_session_id)
+        save_state(state_path, cycle, results, consecutive_failures,
+                   last_session_id, agent_sessions)
 
         elapsed = time.monotonic() - cycle_start
         print(f"[exploration] Cycle {cycle} done ({elapsed:.0f}s)", flush=True)
@@ -383,7 +536,8 @@ def run_exploration(
             _sleep_interruptible(cooldown)
 
     # --- Stopped ---
-    save_state(state_path, cycle, results, consecutive_failures, last_session_id)
+    save_state(state_path, cycle, results, consecutive_failures,
+               last_session_id, agent_sessions)
     update_status_file(output_dir, cycle, "stopped", consecutive_failures)
     conn.close()
     print(f"\n[exploration] Stopped after {cycle} cycles.", flush=True)
