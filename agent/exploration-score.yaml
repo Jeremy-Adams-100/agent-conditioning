@@ -27,6 +27,17 @@ loop:
   max_cycles: null               # null = unlimited (stop with Ctrl+C)
   cycle_cooldown_seconds: 30     # pause between cycles (rate limit headroom)
 
+# Restrict Bash to safe commands — no git, gh, curl, or access outside
+# working_directory. Agents work on research, not repository management.
+allowed_tools:
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - "Bash(python3 *:python *:pip install *:cat *:ls *:mkdir *:cp *:mv *:head *:tail *:wc *)"
+  - WebSearch
+
 agents:
 
   researcher:

@@ -551,6 +551,10 @@ def run_exploration(
     task = task_override or score["task"]
     score_inputs = {"directive": task}
 
+    # Apply score-level tool restrictions (overrides config.yaml for all agents)
+    if "allowed_tools" in score:
+        config["allowed_tools"] = score["allowed_tools"]
+
     # Compaction config
     context_window = config.get("context_window", 1_000_000)
     compact_threshold = config.get("compact_threshold", 0.90)
