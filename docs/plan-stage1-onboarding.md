@@ -102,28 +102,24 @@ to Option B later.
 1. User creates a Wolfram account at wolfram.com/engine
 2. User receives a license key (free for personal use)
 3. User pastes the key into the platform
-4. Backend runs `wolframscript -activate <key>` on the user's VM
-5. Verification: backend runs `wolfram -run "Print[1+1]"` and
+4. Backend passes key to GCP VM startup script
+5. VM runs `wolframscript -activate <key>` automatically
+6. Verification: VM runs `wolfram -run "Print[1+1]"` and
    checks for output "2"
 
 This can be fully automated from the website — the user just
-pastes their key. Activation takes seconds.
+pastes their key. Activation happens on the VM during provisioning.
 
 ## Data Model
 
-```sql
-CREATE TABLE users (
-    id          TEXT PRIMARY KEY,    -- UUID
-    email       TEXT UNIQUE NOT NULL,
-    password    TEXT NOT NULL,       -- bcrypt hash
-    created_at  TEXT NOT NULL,
-    tier        TEXT DEFAULT 'free', -- 'free' or 'max'
-    claude_token TEXT,               -- encrypted
-    wolfram_key TEXT,                -- encrypted
-    vm_id       TEXT,                -- reference to provisioned VM
-    vm_status   TEXT DEFAULT 'none'  -- none/provisioning/ready/stopped
-);
-```
+See [Stage 4: Backend API](plan-stage4-backend.md) for the full
+users table schema. Key onboarding fields:
+
+- `claude_token` — encrypted at rest, injected into GCP VM
+- `wolfram_key` — encrypted at rest, injected into GCP VM
+- `tier` — detected automatically from Claude account capabilities
+- `vm_id` — GCP instance name, created after onboarding completes
+- `vm_status` — none → provisioning → ready
 
 ## What's NOT in Stage 1
 
