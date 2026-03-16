@@ -19,7 +19,7 @@ python3 orchestrator.py
 
 No API key required. The orchestrator calls `claude -p` under the hood, which uses your Max plan.
 
-The agent will use the `efficient` philosophy, follow the `staged` framework (Explore -> Plan -> Execute -> Test -> Document), and compact automatically at 80% of the context window.
+The agent will use the `efficient` philosophy, follow the `staged` framework (Explore -> Plan -> Execute -> Test -> Document), and compact automatically at 90% of the 1M context window.
 
 ## How It Works
 
@@ -61,9 +61,9 @@ Edit `agent/config.yaml`. The minimal version:
 
 ```yaml
 model: opus
-context_window: 200000
+context_window: 1000000
 model_tier: opus
-compact_threshold: 0.80
+compact_threshold: 0.90
 philosophy: efficient
 framework: staged
 checkpoint_format: standard
@@ -78,6 +78,8 @@ The `model` field accepts aliases (`sonnet`, `opus`, `haiku`) or full model name
 | `efficient` | low | high | medium | Ship fast, stay within budget |
 | `thorough` | high | low | high | Peer-review quality, careful work |
 | `research` | high | low | high | Deep investigation, hypothesis-driven |
+| `prompt` | minimal | high | — | Expand ambiguous prompts into clear specs |
+| `audit` | high | medium | high | Multi-cycle defect finding and fixing |
 | `custom` | you decide | you decide | you decide | Your own voice and tradeoffs |
 
 ### Framework Presets
@@ -87,6 +89,8 @@ The `model` field accepts aliases (`sonnet`, `opus`, `haiku`) or full model name
 | `staged` | Explore -> Plan -> Execute -> Test -> Document | Strict gates, one-step regression | Most tasks |
 | `loop` | Build -> Measure -> Adjust (repeat) | Relaxed, iterate until convergence | Optimization, tuning |
 | `freeform` | Working (single stage) | No mandatory gates | Brainstorming, Q&A |
+| `prompt` | Clarify -> Write | Strict, no regression | Prompt expansion |
+| `audit` | Explore -> Execute -> Test -> Document | Strict, multi-cycle | Defect-driven auditing |
 | `custom` | You define | You define | Domain-specific workflows |
 
 ### Other Settings
@@ -212,16 +216,22 @@ agent-conditioning/
 ├── README.md
 └── agent/
     ├── config.yaml                        # Your settings
-    ├── orchestrator.py                    # Main loop + conditioning logic
-    ├── mcp_search_server.py               # MCP server for search_sessions tool
+    ├── orchestrator.py                    # Interactive single-agent loop
+    ├── conductor.py                       # Multi-agent score execution
+    ├── exploration.py                     # Continuous exploration conductor
+    ├── exploration-score.yaml             # Default exploration score
+    ├── mcp_search_server.py               # MCP server for session tools
     ├── templates/
     │   ├── philosophy-template.md         # Layer 1
     │   ├── framework-template.md          # Layer 2
     │   ├── operating-protocol-template.md # Layer 3
     │   └── session-summary-template.md    # Layer 4
-    └── data/
-        ├── sessions.db                    # Created on first run
-        └── mcp_config.json                # Generated at runtime
+    ├── data/
+    │   ├── sessions.db                    # Single source of truth
+    │   ├── exploration_state.json         # Ephemeral exploration state
+    │   └── mcp_config.json                # Generated at runtime
+    └── output/
+        └── exploration_status.md          # Overwritten each cycle
 ```
 
 **Dependencies:**
@@ -243,6 +253,82 @@ Agent Conditioning adds:
 - Claude Code Max plan integration (no API billing)
 
 Both can be used independently. auto-compact's standalone CLI still uses the Anthropic API directly. Agent Conditioning routes all model calls through `claude -p` instead.
+
+## Continuous Exploration
+
+A three-agent loop (researcher → worker → auditor) that explores a domain autonomously, running indefinitely until stopped. Each agent maintains persistent context across cycles via Claude Code session persistence.
+
+### Quick Start
+
+```bash
+# Edit the task directive in the score file
+vi agent/exploration-score.yaml
+
+# Start exploration
+python -m agent.exploration agent/exploration-score.yaml
+```
+
+### Commands
+
+| Action | Method | Effect |
+|--------|--------|--------|
+| **Start** | `python -m agent.exploration score.yaml` | Begin exploration (or resume if state exists) |
+| **Stop** | `Ctrl+C` | Finish current agent, save state, exit |
+| **Stop** (background) | `touch agent/data/exploration.stop` | Same as Ctrl+C, for backgrounded processes |
+| **Clear** | `touch agent/data/exploration.clear` | Stop + clear all agent context for new topic |
+| **Clear** (CLI) | `python -m agent.exploration score.yaml --clear` | Same, before starting |
+| **Resume** | `python -m agent.exploration score.yaml` | Load saved state, continue from last cycle |
+| **Resume** (archived) | `python -m agent.exploration score.yaml --resume data/exploration_state_20260316T1400.json` | Resume a specific archived exploration |
+
+### How It Works
+
+Each cycle runs three agents sequentially:
+
+1. **Researcher** (philosophy: research) — reads the audit report from the previous cycle, determines the next sub-topic, produces a research brief
+2. **Worker** (philosophy: efficient) — reads the research brief, builds tools/models/scripts, produces concrete results
+3. **Auditor** (philosophy: audit) — validates the worker's results, decides: VALIDATED (move on), CONTINUE (same topic), or PIVOT (change direction)
+
+The audit report feeds back to the researcher on the next cycle. No orchestrator agent — the conductor is a deterministic loop.
+
+### Context Persistence
+
+Each agent type has its own Claude Code session UUID, persisted across cycles and stop/resume. Context accumulates naturally — the researcher remembers its prior reasoning, the worker remembers what it built, the auditor remembers what it validated.
+
+When an agent's context exceeds the compact threshold (default 90% of 1M = 900k tokens), auto-compact triggers: the agent summarizes its context, the summary is stored in sessions.db, and a fresh session is bootstrapped with the summary.
+
+### Data Storage
+
+**sessions.db** is the single source of truth. Every agent output and compaction summary is stored with `record_type="exploration"` or `"compaction"`. All records are FTS-searchable.
+
+**exploration_state.json** is ephemeral — it holds the current cycle, results, failure counters, and agent session UUIDs for resume. Overwritten each cycle.
+
+When you **clear**, the state file is archived with a timestamp (e.g., `exploration_state_20260316T1400.json`) before being reset. Use `--resume <file>` to restore a previous exploration.
+
+### Failure Handling
+
+| Agent fails | Response |
+|---|---|
+| Researcher | Skip cycle, retry next cycle with same audit report |
+| Worker | Pass failure marker to auditor, auditor decides next step |
+| Auditor | Use fallback "CONTINUE", research stays on current topic |
+| 3x same agent | 60s pause, then auto-retry |
+| 3x any failure | 60s pause |
+| 3+ total failure cycles | 10min backoff (likely outage) |
+
+### Configuration
+
+Edit `exploration-score.yaml`:
+
+```yaml
+task: |
+  Your exploration directive here.
+
+loop:
+  max_cycles: null               # null = unlimited
+  cycle_cooldown_seconds: 30     # pause between cycles
+```
+
+Each agent can override philosophy, framework, and model in the score file. See `exploration-score.yaml` for the full agent role definitions.
 
 ## Changing Settings
 

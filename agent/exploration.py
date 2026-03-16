@@ -130,6 +130,21 @@ def load_state(path: Path) -> dict | None:
         return None
 
 
+def _archive_state(state_path: Path) -> Path | None:
+    """Copy current state file to a timestamped archive. Returns archive path."""
+    if not state_path.exists():
+        return None
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    archive = state_path.with_name(f"exploration_state_{ts}.json")
+    try:
+        archive.write_text(state_path.read_text())
+        print(f"[exploration] Archived state: {archive.name}", flush=True)
+        return archive
+    except OSError as e:
+        print(f"[exploration] Archive failed: {e}", flush=True)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Token usage helpers
 # ---------------------------------------------------------------------------
@@ -741,6 +756,8 @@ def run_exploration(
 
     # --- Stopped or Cleared ---
     if _clear_requested:
+        # Archive old state before clearing
+        _archive_state(state_path)
         # Clear: save empty state (sessions.db records preserved)
         save_state(state_path, 0, {}, {name: 0 for name in agents},
                    None, {}, {})
@@ -777,12 +794,28 @@ def main():
         "--clear", action="store_true",
         help="Clear saved state and start fresh (sessions.db preserved)",
     )
+    parser.add_argument(
+        "--resume", default=None, metavar="STATE_FILE",
+        help="Resume from a specific archived state file",
+    )
 
     args = parser.parse_args()
 
-    if args.clear:
+    # Determine state path
+    if args.resume:
+        # Resume from archived state: copy it to the active state path
+        resume_path = Path(args.resume)
+        if not resume_path.exists():
+            print(f"[exploration] State file not found: {resume_path}", flush=True)
+            return
+        active_state = Path(args.state or DEFAULT_STATE_PATH)
+        active_state.parent.mkdir(parents=True, exist_ok=True)
+        active_state.write_text(resume_path.read_text())
+        print(f"[exploration] Restored state from: {resume_path.name}", flush=True)
+    elif args.clear:
         sp = Path(args.state or DEFAULT_STATE_PATH)
         if sp.exists():
+            _archive_state(sp)
             sp.unlink()
             print(f"[exploration] Cleared state: {sp}", flush=True)
 
