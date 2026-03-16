@@ -10,6 +10,14 @@ build/
 # Runtime data (created on first run)
 agent/data/sessions.db
 agent/data/mcp_config.json
+agent/data/exploration_state*.json
+agent/data/exploration.stop
+agent/data/exploration.clear
+agent/output/
+
+# Platform runtime data
+platform/data/
+platform/.env
 
 # uv lock file is committed for reproducibility
 # uv.lock
