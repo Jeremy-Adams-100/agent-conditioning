@@ -1,5 +1,6 @@
 """FastAPI application — Agent Explorer platform backend."""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,7 +10,20 @@ from explorer_platform import config
 from explorer_platform.auth import router as auth_router
 from explorer_platform.db import init_db
 from explorer_platform.deps import set_conn
+from explorer_platform.explore import router as explore_router
+from explorer_platform.idle import check_idle_vms
 from explorer_platform.onboard import router as onboard_router
+from explorer_platform.proxy import router as proxy_router
+
+
+async def _idle_loop():
+    """Check for idle VMs every 15 minutes and suspend them."""
+    while True:
+        await asyncio.sleep(900)
+        try:
+            await check_idle_vms()
+        except Exception:
+            pass  # log and continue
 
 
 @asynccontextmanager
@@ -21,7 +35,10 @@ async def lifespan(app: FastAPI):
 
     conn = init_db(config.DB_PATH)
     set_conn(conn)
+
+    idle_task = asyncio.create_task(_idle_loop())
     yield
+    idle_task.cancel()
     conn.close()
 
 
@@ -37,6 +54,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(onboard_router)
+app.include_router(explore_router)
+app.include_router(proxy_router)
 
 
 def run():

@@ -20,3 +20,11 @@ COOKIE_MAX_AGE: int = 60 * 60 * 24 * 30  # 30 days
 # Server
 HOST: str = os.environ.get("PLATFORM_HOST", "0.0.0.0")
 PORT: int = int(os.environ.get("PLATFORM_PORT", "8000"))
+
+# GCP Compute Engine
+GCP_PROJECT: str = os.environ.get("GCP_PROJECT", "")
+GCP_ZONE: str = os.environ.get("GCP_ZONE", "us-central1-a")
+GCP_BASE_IMAGE: str = os.environ.get("GCP_BASE_IMAGE", "agent-explorer-base-v1")
+GCP_MACHINE_TYPE: str = os.environ.get("GCP_MACHINE_TYPE", "e2-medium")
+GCP_MOCK: bool = os.environ.get("GCP_MOCK", "true").lower() == "true"
+VM_AGENT_PORT: int = int(os.environ.get("VM_AGENT_PORT", "8080"))
