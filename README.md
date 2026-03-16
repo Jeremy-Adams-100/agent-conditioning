@@ -349,6 +349,41 @@ loop:
 
 Each agent can override philosophy, framework, and model in the score file. See `exploration-score.yaml` for the full agent role definitions.
 
+## Security
+
+### Exploration Agent Permissions
+
+Exploration agents (researcher, worker, auditor) are restricted to:
+
+| Tool | Scope | Enforcement |
+|------|-------|-------------|
+| Read, Write, Edit, Glob, Grep | `working_directory` only | Claude Code path permissions — hard enforcement |
+| Bash | `wolfram -script` only | Claude Code `--allowedTools` pattern — hard enforcement |
+| WebSearch | Unrestricted | Read-only, no exfiltration risk |
+| MCP session tools | Own sessions.db | Scoped to configured DB path |
+
+Agents **cannot**: run Python, access git/gh, read `.env` or credentials, modify the agent-conditioning codebase, install packages, or execute arbitrary shell commands.
+
+### Security Layers
+
+| Layer | Protects against | Notes |
+|-------|-----------------|-------|
+| Claude's built-in safety | Malicious content generation | Baseline — no replication needed |
+| File tool scoping | File access outside working_directory | Hard enforcement by Claude Code |
+| Bash restriction (Wolfram only) | Shell commands, Python execution, data exfil | Hard enforcement by Claude Code |
+| Wolfram shell functions (`Run[]`, `RunProcess[]`) | Not blocked at CLI level | Extremely low practical risk — Wolfram is a science tool, not an attack platform. Claude's conditioning resists generating shell payloads through multi-agent research pipelines |
+| VM / virtual desktop isolation | Cross-user access, system compromise | Recommended for multi-user deployment. The VM is the blast radius — nothing beyond it to compromise |
+
+### Multi-User Deployment
+
+For multi-user, each user needs:
+- Own `working_directory` (file tool isolation)
+- Own `sessions.db` (session data isolation)
+- Own `exploration_state.json` (state isolation)
+- VM or virtual desktop (OS-level blast radius)
+
+OS-level containerization beyond VM isolation is not required. The realistic threat is resource abuse (infinite loops, disk fill), not security exploits. Address with timeouts and disk quotas at the hosting level.
+
 ## Changing Settings
 
 **Safe to change anytime** (takes effect at next compaction):
