@@ -261,24 +261,43 @@ A three-agent loop (researcher → worker → auditor) that explores a domain au
 ### Quick Start
 
 ```bash
-# Edit the task directive in the score file
-vi agent/exploration-score.yaml
+# Start with an inline task
+cd agent-conditioning
+python -m agent.exploration start "Explore foundations of microlocal analysis"
 
-# Start exploration
-python -m agent.exploration agent/exploration-score.yaml
+# Or edit the task in the score file and start without override
+vi agent/exploration-score.yaml
+python -m agent.exploration start
 ```
 
 ### Commands
 
-| Action | Method | Effect |
-|--------|--------|--------|
-| **Start** | `python -m agent.exploration score.yaml` | Begin exploration (or resume if state exists) |
-| **Stop** | `Ctrl+C` | Finish current agent, save state, exit |
-| **Stop** (background) | `touch agent/data/exploration.stop` | Same as Ctrl+C, for backgrounded processes |
-| **Clear** | `touch agent/data/exploration.clear` | Stop + clear all agent context for new topic |
-| **Clear** (CLI) | `python -m agent.exploration score.yaml --clear` | Same, before starting |
-| **Resume** | `python -m agent.exploration score.yaml` | Load saved state, continue from last cycle |
-| **Resume** (archived) | `python -m agent.exploration score.yaml --resume data/exploration_state_20260316T1400.json` | Resume a specific archived exploration |
+All commands accept optional `--score`, `--config`, `--output`, `--state` flags.
+
+| Command | Effect |
+|---------|--------|
+| `exploration start` | Start exploration using task from score YAML |
+| `exploration start "topic description"` | Start with inline task (archives + clears any existing state) |
+| `exploration stop` | Send stop signal — finishes current agent, saves state |
+| `Ctrl+C` | Same as `stop`, when watching the terminal |
+| `exploration clear` | Stop + archive state + clear context for new topic |
+| `exploration resume` | Continue from saved state |
+| `exploration resume path/to/archived_state.json` | Restore and continue a specific past exploration |
+
+### Lifecycle
+
+```
+exploration start "topic A"     # begins cycles
+  ... cycles run ...
+exploration stop                # saves state, exits
+exploration resume              # picks up where it left off
+  ... more cycles ...
+exploration clear               # archives state, clears context
+exploration start "topic B"     # fresh start, new topic
+  ... cycles run ...
+exploration resume data/exploration_state_20260316T1400.json
+                                # revisit topic A from archived state
+```
 
 ### How It Works
 

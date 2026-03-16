@@ -529,6 +529,7 @@ def run_exploration(
     config_path: str | None = None,
     output_dir: Path | None = None,
     state_path: Path | None = None,
+    task_override: str | None = None,
 ) -> None:
     global _stop_requested, _clear_requested
 
@@ -547,7 +548,7 @@ def run_exploration(
 
     flow = score["flow"]  # list of agent name strings
     agents = score["agents"]
-    task = score["task"]
+    task = task_override or score["task"]
     score_inputs = {"directive": task}
 
     # Compaction config
@@ -777,34 +778,61 @@ def run_exploration(
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# CLI — lightweight command wrappers
 # ---------------------------------------------------------------------------
 
+DEFAULT_SCORE_PATH = str(SCRIPT_DIR / "exploration-score.yaml")
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog="exploration",
-        description="Continuous autonomous exploration conductor",
-    )
-    parser.add_argument("score", help="Path to exploration score YAML")
-    parser.add_argument("--config", default=None, help="Path to config.yaml")
-    parser.add_argument("--output", default=None, help="Output directory")
-    parser.add_argument("--state", default=None, help="State file path")
-    parser.add_argument(
-        "--clear", action="store_true",
-        help="Clear saved state and start fresh (sessions.db preserved)",
-    )
-    parser.add_argument(
-        "--resume", default=None, metavar="STATE_FILE",
-        help="Resume from a specific archived state file",
+
+def _cmd_start(args):
+    """Start exploration, optionally with a task override."""
+    task_override = " ".join(args.task) if args.task else None
+
+    # Clear existing state if starting fresh with a new task
+    if task_override:
+        sp = Path(args.state or DEFAULT_STATE_PATH)
+        if sp.exists():
+            _archive_state(sp)
+            sp.unlink()
+
+    run_exploration(
+        score_path=args.score,
+        config_path=args.config,
+        output_dir=Path(args.output) if args.output else None,
+        state_path=Path(args.state) if args.state else None,
+        task_override=task_override,
     )
 
-    args = parser.parse_args()
 
-    # Determine state path
-    if args.resume:
-        # Resume from archived state: copy it to the active state path
-        resume_path = Path(args.resume)
+def _cmd_stop(args):
+    """Create stop signal file."""
+    data_dir = Path(args.state or DEFAULT_STATE_PATH).parent
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "exploration.stop").write_text("")
+    print("[exploration] Stop signal sent.", flush=True)
+
+
+def _cmd_clear(args):
+    """Create clear signal file (or clear state directly if not running)."""
+    data_dir = Path(args.state or DEFAULT_STATE_PATH).parent
+    data_dir.mkdir(parents=True, exist_ok=True)
+    sp = Path(args.state or DEFAULT_STATE_PATH)
+
+    # If exploration is running, send signal file
+    # If not running, archive and clear directly
+    if sp.exists():
+        _archive_state(sp)
+        sp.unlink()
+        print("[exploration] State archived and cleared.", flush=True)
+
+    (data_dir / "exploration.clear").write_text("")
+    print("[exploration] Clear signal sent.", flush=True)
+
+
+def _cmd_resume(args):
+    """Resume from archived state file or continue from current state."""
+    if args.state_file:
+        resume_path = Path(args.state_file)
         if not resume_path.exists():
             print(f"[exploration] State file not found: {resume_path}", flush=True)
             return
@@ -812,12 +840,6 @@ def main():
         active_state.parent.mkdir(parents=True, exist_ok=True)
         active_state.write_text(resume_path.read_text())
         print(f"[exploration] Restored state from: {resume_path.name}", flush=True)
-    elif args.clear:
-        sp = Path(args.state or DEFAULT_STATE_PATH)
-        if sp.exists():
-            _archive_state(sp)
-            sp.unlink()
-            print(f"[exploration] Cleared state: {sp}", flush=True)
 
     run_exploration(
         score_path=args.score,
@@ -825,6 +847,46 @@ def main():
         output_dir=Path(args.output) if args.output else None,
         state_path=Path(args.state) if args.state else None,
     )
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="exploration",
+        description="Continuous autonomous exploration conductor",
+    )
+    parser.add_argument("--score", default=DEFAULT_SCORE_PATH,
+                        help="Path to exploration score YAML")
+    parser.add_argument("--config", default=None, help="Path to config.yaml")
+    parser.add_argument("--output", default=None, help="Output directory")
+    parser.add_argument("--state", default=None, help="State file path")
+
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # /start [task description]
+    p_start = sub.add_parser("start", help="Start exploration")
+    p_start.add_argument("task", nargs="*", help="Task description (overrides score YAML)")
+
+    # /stop
+    sub.add_parser("stop", help="Send stop signal to running exploration")
+
+    # /clear
+    sub.add_parser("clear", help="Stop + archive state + clear context")
+
+    # /resume [state_file]
+    p_resume = sub.add_parser("resume", help="Resume exploration")
+    p_resume.add_argument("state_file", nargs="?", default=None,
+                          help="Path to archived state file")
+
+    args = parser.parse_args()
+
+    if args.command == "start":
+        _cmd_start(args)
+    elif args.command == "stop":
+        _cmd_stop(args)
+    elif args.command == "clear":
+        _cmd_clear(args)
+    elif args.command == "resume":
+        _cmd_resume(args)
 
 
 if __name__ == "__main__":
