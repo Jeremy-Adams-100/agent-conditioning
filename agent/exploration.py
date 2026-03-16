@@ -10,9 +10,12 @@ Auto-compact integration: when an agent's context exceeds the compact
 threshold, the session is compacted (summary generated, stored in
 sessions.db, fresh session created with summary as bootstrap).
 
-Usage:
-    python -m agent.exploration exploration-score.yaml
-    python -m agent.exploration exploration-score.yaml --reset
+Control:
+    Start:  python -m agent.exploration score.yaml
+    Stop:   Ctrl+C  OR  touch data/exploration.stop
+    Clear:  touch data/exploration.clear  (stops + clears context)
+    Resume: python -m agent.exploration score.yaml
+    Fresh:  python -m agent.exploration score.yaml --clear
 """
 
 import argparse
@@ -46,10 +49,11 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "output"
 DEFAULT_STATE_PATH = SCRIPT_DIR / "data" / "exploration_state.json"
 
 # ---------------------------------------------------------------------------
-# Graceful shutdown via SIGINT / SIGTERM
+# Graceful shutdown via SIGINT / SIGTERM / signal files
 # ---------------------------------------------------------------------------
 
 _stop_requested = False
+_clear_requested = False
 
 
 def _on_signal(signum, frame):
@@ -60,6 +64,24 @@ def _on_signal(signum, frame):
 
 signal.signal(signal.SIGINT, _on_signal)
 signal.signal(signal.SIGTERM, _on_signal)
+
+
+def _check_signal_files(data_dir: Path) -> None:
+    """Check for stop/clear signal files. Sets global flags and removes files."""
+    global _stop_requested, _clear_requested
+
+    clear_file = data_dir / "exploration.clear"
+    stop_file = data_dir / "exploration.stop"
+
+    if clear_file.exists():
+        clear_file.unlink()
+        _stop_requested = True
+        _clear_requested = True
+        print("[exploration] Clear signal received.", flush=True)
+    elif stop_file.exists():
+        stop_file.unlink()
+        _stop_requested = True
+        print("[exploration] Stop signal received.", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -454,11 +476,15 @@ def adaptive_cooldown(base_seconds: int, recent_failure_cycles: int) -> int:
         return 600
 
 
-def _sleep_interruptible(seconds: int) -> None:
-    """Sleep in 1-second increments, checking for stop signal."""
+def _sleep_interruptible(seconds: int, data_dir: Path | None = None) -> None:
+    """Sleep in 1-second increments, checking for stop/clear signals."""
     for _ in range(max(0, int(seconds))):
         if _stop_requested:
             return
+        if data_dir:
+            _check_signal_files(data_dir)
+            if _stop_requested:
+                return
         time.sleep(1)
 
 
@@ -489,12 +515,13 @@ def run_exploration(
     output_dir: Path | None = None,
     state_path: Path | None = None,
 ) -> None:
-    global _stop_requested
+    global _stop_requested, _clear_requested
 
     score = load_exploration_score(score_path)
     config = load_config(config_path)
     output_dir = Path(output_dir or DEFAULT_OUTPUT_DIR)
     state_path = Path(state_path or DEFAULT_STATE_PATH)
+    data_dir = state_path.parent
 
     # Initialize sessions.db
     conn = init_db(Path(config["compact_db"]))
@@ -553,10 +580,16 @@ def run_exploration(
     print(f"[exploration] Max cycles: {max_cycles or 'unlimited'}", flush=True)
     print(f"[exploration] Compact at: {compact_at:,} tokens per agent", flush=True)
     print(f"[exploration] Cooldown: {base_cooldown}s | Ctrl+C to stop", flush=True)
+    print(f"[exploration] Signals: touch {data_dir}/exploration.stop|clear", flush=True)
     print("=" * 60, flush=True)
 
     # --- Main loop ---
     while not _stop_requested:
+        # Check for signal files at cycle boundary
+        _check_signal_files(data_dir)
+        if _stop_requested:
+            break
+
         if max_cycles and cycle >= max_cycles:
             print(f"\n[exploration] Reached max cycles ({max_cycles}).", flush=True)
             break
@@ -569,6 +602,11 @@ def run_exploration(
         print(f"[exploration] === Cycle {cycle} ===", flush=True)
 
         for i, agent_name in enumerate(flow):
+            if _stop_requested:
+                break
+
+            # Check signals between agents
+            _check_signal_files(data_dir)
             if _stop_requested:
                 break
 
@@ -667,7 +705,7 @@ def run_exploration(
                         f"Pausing 60s (Ctrl+C to stop).",
                         flush=True,
                     )
-                    _sleep_interruptible(60)
+                    _sleep_interruptible(60, data_dir)
 
         # --- End of cycle bookkeeping ---
         if _stop_requested:
@@ -685,7 +723,7 @@ def run_exploration(
                 f"cycles with failures. Pausing 60s.",
                 flush=True,
             )
-            _sleep_interruptible(60)
+            _sleep_interruptible(60, data_dir)
 
         # Status file + state
         update_status_file(output_dir, cycle, "running", consecutive_failures)
@@ -699,14 +737,25 @@ def run_exploration(
         cooldown = adaptive_cooldown(base_cooldown, total_failure_streak)
         if cooldown > 0:
             print(f"[exploration] Cooldown: {cooldown}s", flush=True)
-            _sleep_interruptible(cooldown)
+            _sleep_interruptible(cooldown, data_dir)
 
-    # --- Stopped ---
-    save_state(state_path, cycle, results, consecutive_failures,
-               last_session_id, agent_sessions, agent_summaries)
-    update_status_file(output_dir, cycle, "stopped", consecutive_failures)
+    # --- Stopped or Cleared ---
+    if _clear_requested:
+        # Clear: save empty state (sessions.db records preserved)
+        save_state(state_path, 0, {}, {name: 0 for name in agents},
+                   None, {}, {})
+        update_status_file(output_dir, cycle, "cleared", consecutive_failures)
+        print(f"\n[exploration] Cleared after {cycle} cycles.", flush=True)
+        print("[exploration] Context reset. Sessions.db history preserved.", flush=True)
+    else:
+        # Stop: save current state for resume
+        save_state(state_path, cycle, results, consecutive_failures,
+                   last_session_id, agent_sessions, agent_summaries)
+        update_status_file(output_dir, cycle, "stopped", consecutive_failures)
+        print(f"\n[exploration] Stopped after {cycle} cycles.", flush=True)
+        print("[exploration] State preserved. Run again to resume.", flush=True)
+
     conn.close()
-    print(f"\n[exploration] Stopped after {cycle} cycles.", flush=True)
     print(f"[exploration] State: {state_path}", flush=True)
 
 
@@ -725,17 +774,17 @@ def main():
     parser.add_argument("--output", default=None, help="Output directory")
     parser.add_argument("--state", default=None, help="State file path")
     parser.add_argument(
-        "--reset", action="store_true",
-        help="Ignore saved state and start fresh",
+        "--clear", action="store_true",
+        help="Clear saved state and start fresh (sessions.db preserved)",
     )
 
     args = parser.parse_args()
 
-    if args.reset:
+    if args.clear:
         sp = Path(args.state or DEFAULT_STATE_PATH)
         if sp.exists():
             sp.unlink()
-            print(f"[exploration] Reset: removed {sp}", flush=True)
+            print(f"[exploration] Cleared state: {sp}", flush=True)
 
     run_exploration(
         score_path=args.score,
