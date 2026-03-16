@@ -27,15 +27,15 @@ loop:
   max_cycles: null               # null = unlimited (stop with Ctrl+C)
   cycle_cooldown_seconds: 30     # pause between cycles (rate limit headroom)
 
-# Restrict Bash to safe commands — no git, gh, curl, or access outside
-# working_directory. Agents work on research, not repository management.
+# Restrict Bash to Wolfram kernel only — no python, no shell commands,
+# no file reads via cat. All file access goes through scoped file tools.
 allowed_tools:
   - Read
   - Write
   - Edit
   - Glob
   - Grep
-  - "Bash(python3 *:python *:pip install *:cat *:ls *:mkdir *:cp *:mv *:head *:tail *:wc *)"
+  - "Bash(/data/home/jadams2/bin/wolfram *)"
   - WebSearch
 
 agents:
