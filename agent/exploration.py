@@ -415,15 +415,39 @@ def _error_result(agent_name: str, agent_def: dict, error: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _extract_topic(output_text: str) -> str | None:
+    """Extract topic from agent output. Deterministic — no agent involvement.
+
+    Looks for '## Current Sub-Topic' (researcher output format) and
+    extracts the first line after it, stripping markdown bold markers.
+    """
+    if not output_text:
+        return None
+    import re
+    # Match "## Current Sub-Topic" followed by the topic line
+    match = re.search(
+        r"##\s*Current Sub-?Topic\s*\n+\*{0,2}([^\n*]+)\*{0,2}",
+        output_text, re.IGNORECASE
+    )
+    if match:
+        topic = match.group(1).strip()
+        if topic:
+            return topic[:100]  # cap length
+    return None
+
+
 def _store_agent_output(
     conn, agent_name: str, agent_def: dict, output_text: str,
-    cycle: int, parent_id: str | None,
+    cycle: int, parent_id: str | None, current_topic: str | None = None,
 ) -> str:
     """Store an agent's output in sessions.db.
 
     Returns the new session_id on success, or the original parent_id
     on failure (so the chain stays connected to the last successful record).
     """
+    # Extract topic from researcher output, or use the current cycle's topic
+    topic = _extract_topic(output_text) or current_topic
+
     session_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
     try:
@@ -438,6 +462,8 @@ def _store_agent_output(
             framework=agent_def.get("framework"),
             token_estimate=len(output_text) // 4,
             record_type="exploration",
+            topic=topic,
+            keywords=agent_name,  # use agent name as keyword for identification
         )
         return session_id
     except Exception as e:
@@ -616,6 +642,7 @@ def run_exploration(
 
         cycle += 1
         cycle_start = time.monotonic()
+        cycle_topic = None  # set by researcher, inherited by worker/auditor
         cycle_ok = True
 
         print(f"\n{'='*60}", flush=True)
@@ -667,9 +694,15 @@ def run_exploration(
 
                 # Store output in sessions.db
                 output_text = "\n\n".join(result["outputs"].values())
+
+                # Extract topic from researcher output; propagate to worker/auditor
+                extracted = _extract_topic(output_text)
+                if extracted:
+                    cycle_topic = extracted
                 last_session_id = _store_agent_output(
                     conn, agent_name, agent_def, output_text,
                     cycle, last_session_id,
+                    current_topic=cycle_topic,
                 )
 
                 # --- Auto-compact check ---

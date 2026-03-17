@@ -9,10 +9,12 @@ interface SessionListProps {
 }
 
 function formatSessionName(s: SessionEntry): string {
-  // Format: "2026-03-17 19:34_topic" or "2026-03-17 19:34" if no topic
-  const date = s.created_at?.slice(0, 16).replace("T", " ") ?? "unknown";
-  if (s.topic) return `${date}_${s.topic}`;
-  return date;
+  // Format: "19:34 researcher — Topic Name" or "19:34 researcher" if no topic
+  const time = s.created_at?.slice(11, 16) ?? "";
+  const agent = s.keywords ?? "";  // agent name stored as keyword
+  const label = agent ? `${time} ${agent}` : time;
+  if (s.topic) return `${label} — ${s.topic}`;
+  return label || (s.created_at?.slice(0, 16).replace("T", " ") ?? "session");
 }
 
 export default function SessionList({ sessions, selectedId, onSelect }: SessionListProps) {
