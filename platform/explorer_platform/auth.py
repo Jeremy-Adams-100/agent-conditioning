@@ -131,7 +131,6 @@ def detect_claude_credentials():
         return {
             "found": True,
             "token": token,
-            "subscription": sub_type,
         }
     except (json.JSONDecodeError, OSError):
         return {"found": False}

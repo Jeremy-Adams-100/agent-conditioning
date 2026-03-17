@@ -9,14 +9,12 @@ export default function OnboardPage() {
   const [step, setStep] = useState(1);
   const [claudeToken, setClaudeToken] = useState("");
   const [showManualClaude, setShowManualClaude] = useState(false);
-  const [detectedSub, setDetectedSub] = useState("");
   const [wolframKey, setWolframKey] = useState("");
   const [agreedPersonal, setAgreedPersonal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [vmStatus, setVmStatus] = useState("none");
 
-  // Check if already onboarded
   useEffect(() => {
     getOnboardStatus()
       .then((s) => {
@@ -34,7 +32,6 @@ export default function OnboardPage() {
       .then((d) => {
         if (d.found && d.token) {
           setClaudeToken(d.token);
-          setDetectedSub(d.subscription || "");
         }
       })
       .catch(() => {});
@@ -87,7 +84,7 @@ export default function OnboardPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <h1 className="text-2xl font-bold mb-1">Connect Your Accounts</h1>
-        <p className="text-gray-500 text-sm mb-6">Step {step} of 2</p>
+        <p className="text-gray-400 text-sm mb-6">Step {step} of 2</p>
 
         {step === 1 && (
           <form onSubmit={handleClaude} className="flex flex-col gap-4">
@@ -95,30 +92,28 @@ export default function OnboardPage() {
               <label className="block text-sm font-medium mb-1">Claude Account</label>
 
               {claudeToken && !showManualClaude ? (
-                /* Auto-detected credentials */
-                <div className="border border-green-200 bg-green-50 rounded-lg p-3">
-                  <p className="text-sm text-green-800 font-medium">
-                    Claude credentials detected
+                <div className="border border-emerald-700 bg-emerald-950 rounded-lg p-3">
+                  <p className="text-sm text-emerald-300 font-medium">
+                    Claude credentials detected on this machine
                   </p>
-                  <p className="text-xs text-green-600 mt-1">
-                    Plan: {detectedSub || "unknown"}
+                  <p className="text-xs text-emerald-500 mt-1">
+                    Your tier will be detected after VM setup
                   </p>
                 </div>
               ) : (
-                /* Manual paste fallback */
                 <>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-400 mb-2">
                     Run this in your terminal to get your token:
                   </p>
-                  <code className="block bg-gray-50 border border-gray-200 rounded px-3 py-2 text-xs font-mono mb-2 select-all">
+                  <code className="block bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs font-mono text-gray-300 mb-2 select-all">
                     cat ~/.claude/.credentials.json
                   </code>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Copy the <code className="bg-gray-100 px-1">accessToken</code> value
-                    (starts with <code className="bg-gray-100 px-1">sk-ant-</code>) and
+                  <p className="text-xs text-gray-400 mb-2">
+                    Copy the <code className="bg-gray-800 px-1 text-gray-300">accessToken</code> value
+                    (starts with <code className="bg-gray-800 px-1 text-gray-300">sk-ant-</code>) and
                     paste it below. Need Claude?{" "}
                     <a href="https://claude.ai" target="_blank" rel="noopener noreferrer"
-                       className="text-gray-900 underline">Sign up free</a>
+                       className="text-white underline">Sign up free</a>
                   </p>
                   <input
                     type="text"
@@ -126,7 +121,7 @@ export default function OnboardPage() {
                     value={claudeToken}
                     onChange={(e) => setClaudeToken(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 font-mono text-sm"
+                    className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                   />
                 </>
               )}
@@ -135,17 +130,17 @@ export default function OnboardPage() {
                 <button
                   type="button"
                   onClick={() => setShowManualClaude(true)}
-                  className="text-xs text-gray-400 mt-2 hover:text-gray-600"
+                  className="text-xs text-gray-500 mt-2 hover:text-gray-300"
                 >
                   Use a different token
                 </button>
               )}
             </div>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading || !claudeToken.trim()}
-              className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
             >
               {loading ? "Connecting..." : "Connect Claude"}
             </button>
@@ -158,10 +153,10 @@ export default function OnboardPage() {
               <label className="block text-sm font-medium mb-1">
                 Wolfram Engine License Key
               </label>
-              <p className="text-xs text-gray-500 mb-2">
+              <p className="text-xs text-gray-400 mb-2">
                 Get a free license at{" "}
                 <a href="https://www.wolfram.com/engine/" target="_blank"
-                   rel="noopener noreferrer" className="text-gray-900 underline">
+                   rel="noopener noreferrer" className="text-white underline font-medium">
                   wolfram.com/engine
                 </a>
               </p>
@@ -171,7 +166,7 @@ export default function OnboardPage() {
                 value={wolframKey}
                 onChange={(e) => setWolframKey(e.target.value)}
                 required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 font-mono text-sm"
+                className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
               />
             </div>
             <label className="flex items-start gap-2 text-sm">
@@ -182,15 +177,15 @@ export default function OnboardPage() {
                 required
                 className="mt-0.5"
               />
-              <span className="text-gray-600">
+              <span className="text-gray-400">
                 I confirm this is for personal, non-commercial research purposes.
               </span>
             </label>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading || !agreedPersonal}
-              className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
             >
               {loading ? "Connecting..." : "Connect Wolfram"}
             </button>
@@ -199,15 +194,15 @@ export default function OnboardPage() {
 
         {vmStatus === "provisioning" && (
           <div className="text-center py-8">
-            <div className="inline-block w-6 h-6 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mb-4" />
-            <p className="text-gray-600">Setting up your research environment...</p>
-            <p className="text-xs text-gray-400 mt-1">This takes about 30 seconds</p>
+            <div className="inline-block w-6 h-6 border-2 border-gray-600 border-t-gray-200 rounded-full animate-spin mb-4" />
+            <p className="text-gray-300">Setting up your research environment...</p>
+            <p className="text-xs text-gray-500 mt-1">This takes about 30 seconds</p>
           </div>
         )}
 
         {vmStatus === "ready" && (
           <div className="text-center py-8">
-            <p className="text-green-600 font-medium">Ready!</p>
+            <p className="text-emerald-400 font-medium">Ready!</p>
           </div>
         )}
       </div>

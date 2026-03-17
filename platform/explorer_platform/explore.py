@@ -49,8 +49,8 @@ async def start_exploration(body: StartRequest, user=Depends(get_current_user),
     client = get_vm_client(user)
     try:
         result = await client.start(body.topic)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(502, f"VM agent error: {e.response.status_code}")
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ConnectTimeout) as e:
+        raise HTTPException(502, f"VM agent unreachable — exploration may not be running yet")
     update_user_field(conn, user["id"], "vm_status", "running")
     return result
 
@@ -60,8 +60,8 @@ async def stop_exploration(user=Depends(get_current_user)):
     client = get_vm_client(user)
     try:
         return await client.stop()
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(502, f"VM agent error: {e.response.status_code}")
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ConnectTimeout):
+        return {"status": "no_vm"}
 
 
 @router.post("/clear")
@@ -69,8 +69,8 @@ async def clear_exploration(user=Depends(get_current_user)):
     client = get_vm_client(user)
     try:
         return await client.clear()
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(502, f"VM agent error: {e.response.status_code}")
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ConnectTimeout):
+        return {"status": "no_vm"}
 
 
 @router.post("/resume")

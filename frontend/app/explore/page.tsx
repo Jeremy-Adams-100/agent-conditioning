@@ -89,7 +89,7 @@ export default function ExplorePage() {
   return (
     <div className="h-screen flex flex-col">
       {/* Top bar */}
-      <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-200 flex-shrink-0">
+      <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-800 flex-shrink-0">
         <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
         <div className="flex-1 min-w-0">
           <Controls
@@ -100,7 +100,7 @@ export default function ExplorePage() {
         </div>
         <div className="hidden md:flex items-center gap-2">
           <StatusBar status={status} />
-          <span className="text-xs text-gray-400 border border-gray-200 rounded px-2 py-0.5">
+          <span className="text-xs text-gray-500 border border-gray-700 rounded px-2 py-0.5">
             {tier === "max" ? "Max" : "Free"}
           </span>
           {tier !== "max" && (
@@ -108,7 +108,7 @@ export default function ExplorePage() {
               href="https://claude.ai/pricing"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-blue-500 hover:underline"
+              className="text-xs text-emerald-400 hover:underline"
             >
               Upgrade
             </a>
@@ -119,14 +119,14 @@ export default function ExplorePage() {
       {/* Main content */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Sidebar — hidden on mobile unless toggled */}
-        <aside className={`${mobilePanel === "sidebar" ? "flex" : "hidden"} md:flex w-full md:w-64 border-r border-gray-200 flex-col flex-shrink-0 overflow-hidden`}>
-          <div className="flex border-b border-gray-200">
+        <aside className={`${mobilePanel === "sidebar" ? "flex" : "hidden"} md:flex w-full md:w-64 border-r border-gray-800 flex-col flex-shrink-0 overflow-hidden`}>
+          <div className="flex border-b border-gray-800">
             <button
               onClick={() => setSidebarTab("sessions")}
               className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
                 sidebarTab === "sessions"
-                  ? "text-gray-900 border-b-2 border-gray-900"
-                  : "text-gray-400 hover:text-gray-600"
+                  ? "text-gray-100 border-b-2 border-gray-100"
+                  : "text-gray-400 hover:text-gray-300"
               }`}
             >
               Sessions
@@ -138,8 +138,8 @@ export default function ExplorePage() {
               }}
               className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
                 sidebarTab === "files"
-                  ? "text-gray-900 border-b-2 border-gray-900"
-                  : "text-gray-400 hover:text-gray-600"
+                  ? "text-gray-100 border-b-2 border-gray-100"
+                  : "text-gray-400 hover:text-gray-300"
               }`}
             >
               Files
@@ -182,7 +182,7 @@ export default function ExplorePage() {
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden flex border-t border-gray-200 flex-shrink-0">
+      <nav className="md:hidden flex border-t border-gray-800 flex-shrink-0">
         <button
           onClick={() => setMobilePanel("content")}
           className={`flex-1 py-2 text-xs font-medium ${

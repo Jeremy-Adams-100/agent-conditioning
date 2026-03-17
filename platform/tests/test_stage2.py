@@ -67,7 +67,8 @@ def test_proxy_status_without_vm(client):
         "email": "noproxy@example.com", "password": "testpass123"
     })
     r = client.get("/api/data/status", cookies=r.cookies)
-    assert r.status_code == 409  # VM not provisioned
+    assert r.status_code == 200  # graceful default when VM unreachable
+    assert r.json()["exploration_running"] is False
 
 
 def test_proxy_files_without_vm(client):
@@ -75,7 +76,8 @@ def test_proxy_files_without_vm(client):
         "email": "nofiles@example.com", "password": "testpass123"
     })
     r = client.get("/api/data/files", cookies=r.cookies)
-    assert r.status_code == 409
+    assert r.status_code == 200
+    assert r.json() == []
 
 
 # --- Auth required for all new endpoints ---

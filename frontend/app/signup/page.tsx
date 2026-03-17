@@ -16,7 +16,6 @@ export default function SignupPage() {
   const turnstileRef = useRef<HTMLDivElement>(null);
   const turnstileToken = useRef("");
 
-  // Fetch Turnstile site key (if configured)
   useEffect(() => {
     fetch("/api/auth/turnstile-key")
       .then((r) => r.json())
@@ -28,6 +27,7 @@ export default function SignupPage() {
     if (siteKey && turnstileRef.current && window.turnstile) {
       window.turnstile.render(turnstileRef.current, {
         sitekey: siteKey,
+        theme: "dark",
         callback: (token: string) => { turnstileToken.current = token; },
       });
     }
@@ -64,7 +64,7 @@ export default function SignupPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
           />
           <input
             type="password"
@@ -73,21 +73,21 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
-            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
           />
           {siteKey && <div ref={turnstileRef} />}
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-red-400 text-sm">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            className="px-6 py-2.5 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
           >
             {loading ? "Creating..." : "Sign Up"}
           </button>
         </form>
         <p className="mt-4 text-sm text-gray-500">
           Already have an account?{" "}
-          <Link href="/login" className="text-gray-900 font-medium hover:underline">
+          <Link href="/login" className="text-gray-300 font-medium hover:underline">
             Log in
           </Link>
         </p>

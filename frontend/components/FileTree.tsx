@@ -14,13 +14,9 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
 }
 
-export default function FileTree({
-  files,
-  selectedPath,
-  onSelect,
-}: FileTreeProps) {
+export default function FileTree({ files, selectedPath, onSelect }: FileTreeProps) {
   if (files.length === 0) {
-    return <p className="text-xs text-gray-400 p-2">No files yet</p>;
+    return <p className="text-xs text-gray-500 p-2">No files yet</p>;
   }
 
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
@@ -33,14 +29,12 @@ export default function FileTree({
           onClick={() => onSelect(f.path)}
           className={`w-full text-left px-3 py-1 text-xs flex justify-between rounded transition-colors ${
             selectedPath === f.path
-              ? "bg-gray-100 text-gray-900"
-              : "text-gray-600 hover:bg-gray-50"
+              ? "bg-gray-800 text-gray-100"
+              : "text-gray-400 hover:bg-gray-800/50"
           }`}
         >
           <span className="truncate">{f.path}</span>
-          <span className="text-gray-400 ml-2 flex-shrink-0">
-            {formatSize(f.size)}
-          </span>
+          <span className="text-gray-600 ml-2 flex-shrink-0">{formatSize(f.size)}</span>
         </button>
       ))}
     </div>
