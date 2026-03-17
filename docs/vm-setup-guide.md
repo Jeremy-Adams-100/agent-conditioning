@@ -10,7 +10,7 @@ credentials are injected via GCP instance metadata at boot time.
 
 | Field | Value |
 |-------|-------|
-| Name | `agent-explorer-base-v2` |
+| Name | `agent-explorer-base-v3` |
 | Project | `agent-explorer-app` |
 | Family | `agent-explorer` |
 | OS | Ubuntu 24.04 LTS |
@@ -31,7 +31,7 @@ credentials are injected via GCP instance metadata at boot time.
 | VM agent | `/opt/agent-conditioning/platform/vm_agent/` | Part of repo |
 | Deploy keys | `/opt/deploy-keys/` | Read-only SSH keys |
 | Startup script | `/opt/vm-startup.sh` | Runs on every boot |
-| Wolfram Engine | **NOT INSTALLED** | Requires manual .deb download |
+| Wolfram Engine | `/usr/local/Wolfram/WolframEngine/14.3/` | 14.3.0 (activation per-user at boot) |
 
 ## Deploy Keys
 

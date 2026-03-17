@@ -24,7 +24,7 @@ PORT: int = int(os.environ.get("PLATFORM_PORT", "8000"))
 # GCP Compute Engine
 GCP_PROJECT: str = os.environ.get("GCP_PROJECT", "")
 GCP_ZONE: str = os.environ.get("GCP_ZONE", "us-central1-a")
-GCP_BASE_IMAGE: str = os.environ.get("GCP_BASE_IMAGE", "agent-explorer-base-v2")
+GCP_BASE_IMAGE: str = os.environ.get("GCP_BASE_IMAGE", "agent-explorer-base-v3")
 GCP_MACHINE_TYPE: str = os.environ.get("GCP_MACHINE_TYPE", "e2-medium")
 GCP_MOCK: bool = os.environ.get("GCP_MOCK", "true").lower() == "true"
 VM_AGENT_PORT: int = int(os.environ.get("VM_AGENT_PORT", "8080"))
