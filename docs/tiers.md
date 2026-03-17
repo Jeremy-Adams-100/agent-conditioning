@@ -6,9 +6,9 @@
 |-----------|------|------------------|
 | Claude model | Sonnet | Opus |
 | Context window | 200,000 tokens | 1,000,000 tokens |
-| Cycle cooldown | 300s (5 min) | 30s |
-| Approx. cycles/hour | 12 | 120 |
-| Approx. cycles/day | 288 | 2,880 |
+| Cycle cooldown | 1000s (~17 min) | 30s |
+| Approx. cycles/hour | 3-4 | 120 |
+| Approx. cycles/day | ~86 | 2,880 |
 | Compaction threshold | 90% | 90% |
 | Wolfram Engine | Full access | Full access |
 | Session search (MCP) | Full access | Full access |
@@ -20,20 +20,16 @@
 
 Claude Free gives roughly 25-30 messages per 5 hours (varies).
 Each exploration cycle = 3 agent calls (researcher + worker + auditor).
-At 300s cooldown: ~12 cycles/hour = ~36 messages/hour. Over 5 hours,
-that's ~180 messages — within Claude's free tier limits with headroom.
+At 1000s cooldown: ~3-4 cycles/hour = ~10 messages/hour. Over 5
+hours, that's ~50 messages — conservative enough to stay under
+Claude's free tier limits regardless of exact quota.
 
-If the user hits Claude's rate limit anyway (e.g., agents use tools
-that make additional calls), the failure handler kicks in:
-- 1-2 failures: 60s pause
-- 3+ failures: 10min backoff
+If the user hits Claude's rate limit anyway, the failure handler
+kicks in: 60s pause on first failures, 10min backoff on 3+.
 
-The 300s cooldown prevents this from happening in normal operation.
-Users get steady, continuous research without hitting walls.
-
-At 120s cooldown (previously planned), users would exhaust Claude's
-free quota in ~20 minutes and then face repeated 10-minute backoffs.
-300s provides even pacing over the full day.
+The 1000s cooldown is a starting point — adjust based on observed
+rate limit behavior. Can be reduced if free limits are more generous
+than expected, or increased to 1800s if limits are hit prematurely.
 
 ## What Does NOT Change Between Tiers
 
