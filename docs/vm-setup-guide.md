@@ -10,7 +10,7 @@ credentials are injected via GCP instance metadata at boot time.
 
 | Field | Value |
 |-------|-------|
-| Name | `agent-explorer-base-v3` |
+| Name | `agent-explorer-base-v4` |
 | Project | `agent-explorer-app` |
 | Family | `agent-explorer` |
 | OS | Ubuntu 24.04 LTS |
@@ -29,9 +29,12 @@ credentials are injected via GCP instance metadata at boot time.
 | agent-conditioning | `/opt/agent-conditioning/` | Git clone (main) |
 | auto-compact | `/opt/auto-compact/` | Git clone (main) |
 | VM agent | `/opt/agent-conditioning/platform/vm_agent/` | Part of repo |
-| Deploy keys | `/opt/deploy-keys/` | Read-only SSH keys |
+| wolfram-bridge | `/opt/wolfram-bridge/` | Git clone (main) |
+| pde_solver | `/opt/wolfram-bridge/pde_solver/` | Base PDE library |
+| Deploy keys | `/opt/deploy-keys/` | 3 read-only SSH keys |
 | Startup script | `/opt/vm-startup.sh` | Runs on every boot |
 | Wolfram Engine | `/usr/local/Wolfram/WolframEngine/14.3/` | 14.3.0 (activation per-user at boot) |
+| User workspace | `/opt/wolfram-bridge/workspace/` | File tool scope |
 
 ## Deploy Keys
 
@@ -194,7 +197,7 @@ gcloud compute instances delete-access-config agent-explorer-template \
 gcloud compute instances stop agent-explorer-template --zone=us-central1-a
 
 # Create image
-gcloud compute images create agent-explorer-base-v3 \
+gcloud compute images create agent-explorer-base-v4 \
     --source-disk=agent-explorer-template \
     --source-disk-zone=us-central1-a \
     --family=agent-explorer \
