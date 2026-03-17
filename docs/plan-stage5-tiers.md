@@ -1,4 +1,6 @@
-# Stage 5: Tier Configuration
+# Stage 5: Tier Configuration — COMPLETE
+
+**Status:** Implemented. See [tiers.md](tiers.md) for full reference.
 
 ## Goal
 

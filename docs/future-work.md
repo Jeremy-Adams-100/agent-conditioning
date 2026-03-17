@@ -84,3 +84,9 @@ Address these during Stage 6 (Polish & Hardening) or as needed.
 
 - **Multi-region support** — Currently us-central1 only. Add
   region selection based on user location.
+
+- **Customer-Managed Encryption Keys (CMEK)** — For users with
+  sensitive IP, allow them to provide their own GCP KMS key for
+  VM disk encryption. They control the key and can revoke access.
+  GCP default encryption (AES-256, Google-managed) is already
+  enabled for all VMs.

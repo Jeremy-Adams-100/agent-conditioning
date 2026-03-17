@@ -19,7 +19,7 @@ TIERS = {
     "free": {
         "model": "sonnet",
         "context_window": 200_000,
-        "cycle_cooldown_seconds": 120,
+        "cycle_cooldown_seconds": 300,
     },
     "max": {
         "model": "opus",
