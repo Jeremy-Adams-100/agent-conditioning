@@ -79,7 +79,7 @@ async def resume_exploration(user=Depends(get_current_user), conn=Depends(get_db
     client = get_vm_client(user)
     try:
         result = await client.start("")  # empty topic = resume
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(502, f"VM agent error: {e.response.status_code}")
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ConnectTimeout):
+        raise HTTPException(502, "VM agent unreachable — exploration may not be running yet")
     update_user_field(conn, user["id"], "vm_status", "running")
     return result
