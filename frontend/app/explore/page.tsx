@@ -50,7 +50,7 @@ export default function ExplorePage() {
       setViewing({
         type: "session",
         id: session.id,
-        title: `Cycle ${session.depth ?? "?"} — ${session.philosophy ?? "agent"}`,
+        title: `${session.created_at?.slice(0, 16).replace("T", " ") ?? ""}${session.topic ? "_" + session.topic : ""}`,
         content: full.summary_xml ?? "(empty)",
       });
     } catch {

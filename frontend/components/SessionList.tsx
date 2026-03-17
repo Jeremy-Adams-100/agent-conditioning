@@ -8,47 +8,37 @@ interface SessionListProps {
   onSelect: (session: SessionEntry) => void;
 }
 
-const PHILOSOPHY_LABELS: Record<string, string> = {
-  research: "researcher",
-  efficient: "worker",
-  audit: "auditor",
-};
+function formatSessionName(s: SessionEntry): string {
+  // Format: "2026-03-17 19:34_topic" or "2026-03-17 19:34" if no topic
+  const date = s.created_at?.slice(0, 16).replace("T", " ") ?? "unknown";
+  if (s.topic) return `${date}_${s.topic}`;
+  return date;
+}
 
 export default function SessionList({ sessions, selectedId, onSelect }: SessionListProps) {
-  const byCycle = new Map<number, SessionEntry[]>();
-  for (const s of sessions) {
-    const cycle = s.depth ?? 0;
-    if (!byCycle.has(cycle)) byCycle.set(cycle, []);
-    byCycle.get(cycle)!.push(s);
-  }
-  const cycles = [...byCycle.keys()].sort((a, b) => b - a);
-
-  if (cycles.length === 0) {
+  if (sessions.length === 0) {
     return <p className="text-xs text-gray-500 p-2">No sessions yet</p>;
   }
 
+  // Sort by created_at descending (newest first)
+  const sorted = [...sessions].sort((a, b) =>
+    (b.created_at ?? "").localeCompare(a.created_at ?? "")
+  );
+
   return (
     <div className="text-sm">
-      {cycles.map((cycle) => (
-        <div key={cycle} className="mb-1">
-          <div className="px-2 py-1 text-xs font-medium text-gray-500">Cycle {cycle}</div>
-          {byCycle.get(cycle)!.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => onSelect(s)}
-              className={`w-full text-left px-3 py-1 text-xs rounded transition-colors ${
-                selectedId === s.id
-                  ? "bg-gray-800 text-gray-100"
-                  : "text-gray-400 hover:bg-gray-800/50"
-              }`}
-            >
-              {PHILOSOPHY_LABELS[s.philosophy ?? ""] ?? s.philosophy ?? "agent"}
-              {s.record_type === "compaction" && (
-                <span className="ml-1 text-gray-600">(compacted)</span>
-              )}
-            </button>
-          ))}
-        </div>
+      {sorted.map((s) => (
+        <button
+          key={s.id}
+          onClick={() => onSelect(s)}
+          className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors truncate ${
+            selectedId === s.id
+              ? "bg-gray-800 text-gray-100"
+              : "text-gray-400 hover:bg-gray-800/50"
+          }`}
+        >
+          {formatSessionName(s)}
+        </button>
       ))}
     </div>
   );
