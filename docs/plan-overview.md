@@ -112,7 +112,7 @@ VMs suspend when idle (GCP native suspend — memory preserved,
 | 3 | Website frontend | **COMPLETE** | Next.js (Q.E.D.): landing, auth, onboarding, explorer. |
 | 4 | Backend API | MERGED INTO 2 | Explore + proxy endpoints built in Stage 2 |
 | 5 | Tier configuration | **COMPLETE** | Free/Max detection, per-tier VM config, upgrade link. |
-| 6 | Polish & hardening | NEXT | Email verification, CAPTCHA, mobile responsive, logging |
+| 6 | Polish & hardening | **COMPLETE** | Turnstile CAPTCHA, email verification, mobile responsive, structured logging |
 | 7 | Scaling | PENDING | Parallel VM provisioning, multi-zone, quota management |
 
 Detailed plans and references:
