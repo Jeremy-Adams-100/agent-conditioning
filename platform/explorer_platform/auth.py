@@ -105,3 +105,33 @@ def logout(response: Response, _user=Depends(get_current_user)):
 def get_turnstile_key():
     """Return the Turnstile site key for the frontend (public, no auth needed)."""
     return {"site_key": config.TURNSTILE_SITE_KEY}
+
+
+@router.get("/detect-claude")
+def detect_claude_credentials():
+    """Auto-detect local Claude credentials (dev/single-user convenience).
+
+    Reads ~/.claude/.credentials.json if present. Returns the token
+    and subscription type, or empty if not found.
+    """
+    import json
+    from pathlib import Path
+
+    creds_path = Path.home() / ".claude" / ".credentials.json"
+    if not creds_path.exists():
+        return {"found": False}
+
+    try:
+        data = json.loads(creds_path.read_text())
+        oauth = data.get("claudeAiOauth", {})
+        token = oauth.get("accessToken", "")
+        sub_type = oauth.get("subscriptionType", "unknown")
+        if not token:
+            return {"found": False}
+        return {
+            "found": True,
+            "token": token,
+            "subscription": sub_type,
+        }
+    except (json.JSONDecodeError, OSError):
+        return {"found": False}

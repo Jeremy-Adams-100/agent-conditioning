@@ -8,6 +8,8 @@ export default function OnboardPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [claudeToken, setClaudeToken] = useState("");
+  const [showManualClaude, setShowManualClaude] = useState(false);
+  const [detectedSub, setDetectedSub] = useState("");
   const [wolframKey, setWolframKey] = useState("");
   const [agreedPersonal, setAgreedPersonal] = useState(false);
   const [error, setError] = useState("");
@@ -23,6 +25,20 @@ export default function OnboardPage() {
       })
       .catch(() => router.push("/login"));
   }, [router]);
+
+  // Auto-detect local Claude credentials
+  useEffect(() => {
+    if (step !== 1) return;
+    fetch("/api/auth/detect-claude", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.found && d.token) {
+          setClaudeToken(d.token);
+          setDetectedSub(d.subscription || "");
+        }
+      })
+      .catch(() => {});
+  }, [step]);
 
   async function handleClaude(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +60,6 @@ export default function OnboardPage() {
     setLoading(true);
     try {
       await linkWolfram(wolframKey);
-      // Poll for VM provisioning
       setVmStatus("provisioning");
       const poll = setInterval(async () => {
         try {
@@ -58,7 +73,6 @@ export default function OnboardPage() {
           // keep polling
         }
       }, 2000);
-      // Timeout after 90s — redirect regardless (status checked on /explore)
       setTimeout(() => {
         clearInterval(poll);
         router.push("/explore");
@@ -70,7 +84,7 @@ export default function OnboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <h1 className="text-2xl font-bold mb-1">Connect Your Accounts</h1>
         <p className="text-gray-500 text-sm mb-6">Step {step} of 2</p>
@@ -78,35 +92,62 @@ export default function OnboardPage() {
         {step === 1 && (
           <form onSubmit={handleClaude} className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Claude Token</label>
-              <p className="text-xs text-gray-500 mb-2">
-                Get your token from{" "}
-                <a
-                  href="https://claude.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline"
+              <label className="block text-sm font-medium mb-1">Claude Account</label>
+
+              {claudeToken && !showManualClaude ? (
+                /* Auto-detected credentials */
+                <div className="border border-green-200 bg-green-50 rounded-lg p-3">
+                  <p className="text-sm text-green-800 font-medium">
+                    Claude credentials detected
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Plan: {detectedSub || "unknown"}
+                  </p>
+                </div>
+              ) : (
+                /* Manual paste fallback */
+                <>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Run this in your terminal to get your token:
+                  </p>
+                  <code className="block bg-gray-50 border border-gray-200 rounded px-3 py-2 text-xs font-mono mb-2 select-all">
+                    cat ~/.claude/.credentials.json
+                  </code>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Copy the <code className="bg-gray-100 px-1">accessToken</code> value
+                    (starts with <code className="bg-gray-100 px-1">sk-ant-</code>) and
+                    paste it below. Need Claude?{" "}
+                    <a href="https://claude.ai" target="_blank" rel="noopener noreferrer"
+                       className="text-gray-900 underline">Sign up free</a>
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="sk-ant-..."
+                    value={claudeToken}
+                    onChange={(e) => setClaudeToken(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 font-mono text-sm"
+                  />
+                </>
+              )}
+
+              {claudeToken && !showManualClaude && (
+                <button
+                  type="button"
+                  onClick={() => setShowManualClaude(true)}
+                  className="text-xs text-gray-400 mt-2 hover:text-gray-600"
                 >
-                  claude.ai
-                </a>
-                . A free account works — upgrade to Max for faster exploration.
-              </p>
-              <input
-                type="text"
-                placeholder="Paste your Claude token"
-                value={claudeToken}
-                onChange={(e) => setClaudeToken(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 font-mono text-sm"
-              />
+                  Use a different token
+                </button>
+              )}
             </div>
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !claudeToken.trim()}
               className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
             >
-              {loading ? "Linking..." : "Connect Claude"}
+              {loading ? "Connecting..." : "Connect Claude"}
             </button>
           </form>
         )}
@@ -119,12 +160,8 @@ export default function OnboardPage() {
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 Get a free license at{" "}
-                <a
-                  href="https://www.wolfram.com/engine/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-900 underline"
-                >
+                <a href="https://www.wolfram.com/engine/" target="_blank"
+                   rel="noopener noreferrer" className="text-gray-900 underline">
                   wolfram.com/engine
                 </a>
               </p>
@@ -155,7 +192,7 @@ export default function OnboardPage() {
               disabled={loading || !agreedPersonal}
               className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
             >
-              {loading ? "Linking..." : "Connect Wolfram"}
+              {loading ? "Connecting..." : "Connect Wolfram"}
             </button>
           </form>
         )}
