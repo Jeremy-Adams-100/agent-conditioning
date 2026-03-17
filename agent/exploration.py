@@ -446,7 +446,7 @@ def _store_agent_output(
     on failure (so the chain stays connected to the last successful record).
     """
     # Extract topic from researcher output, or use the current cycle's topic
-    topic = _extract_topic(output_text) or current_topic
+    topic = _extract_topic(output_text) or current_topic or "Untitled"
 
     session_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
