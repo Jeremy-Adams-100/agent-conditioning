@@ -25,7 +25,7 @@ mkdir -p "$PROJECT_ROOT/agent/data" "$PROJECT_ROOT/agent/output" /tmp/qed-worksp
 # 1. VM Agent (port 8080)
 export VM_AGENT_TOKEN="dev-token-local"
 export DATA_DIR="$PROJECT_ROOT/agent/data"
-export WORKING_DIR="/tmp/qed-workspace"
+export WORKING_DIR="/data/home/jadams2/wolfram-bridge"
 export PYTHONPATH="$PROJECT_ROOT/platform"
 export EXPLORATION_CMD="$PROJECT_ROOT/platform/.venv/bin/python -m agent.exploration --score $PROJECT_ROOT/agent/exploration-score.yaml --config $PROJECT_ROOT/agent/config.yaml --state $PROJECT_ROOT/agent/data/exploration_state.json"
 export PROJECT_ROOT="$PROJECT_ROOT"
