@@ -6,6 +6,7 @@ import secrets
 import httpx
 
 from explorer_platform import config, gcp
+from explorer_platform.crypto import decrypt
 from explorer_platform.db import get_user_by_id, update_user_field
 from explorer_platform.deps import get_db
 
@@ -38,8 +39,8 @@ async def provision_vm(user_id: str) -> None:
             name=vm_name,
             metadata={
                 "vm-agent-token": vm_agent_token,
-                "claude-token": user["claude_token"] or "",
-                "wolfram-key": user["wolfram_key"] or "",
+                "claude-token": decrypt(user["claude_token"]) if user["claude_token"] else "",
+                "wolfram-key": decrypt(user["wolfram_key"]) if user["wolfram_key"] else "",
                 "tier": user["tier"] or "unknown",
             },
         )

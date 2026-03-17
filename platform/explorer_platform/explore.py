@@ -37,7 +37,7 @@ async def _ensure_vm_running(user: dict, conn) -> None:
                 await client.get_status()
                 update_user_field(conn, user["id"], "vm_status", "running")
                 return
-            except (httpx.ConnectError, httpx.TimeoutException):
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
                 await asyncio.sleep(2)
         raise HTTPException(504, "VM resumed but agent not responding")
 

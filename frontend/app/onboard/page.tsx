@@ -58,10 +58,10 @@ export default function OnboardPage() {
           // keep polling
         }
       }, 2000);
-      // Timeout after 90s
+      // Timeout after 90s — redirect regardless (status checked on /explore)
       setTimeout(() => {
         clearInterval(poll);
-        if (vmStatus !== "ready") router.push("/explore");
+        router.push("/explore");
       }, 90000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to link Wolfram");
