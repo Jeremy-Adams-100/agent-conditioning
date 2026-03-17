@@ -176,10 +176,17 @@ export default function ExplorePage() {
               {isRunning ? (
                 <>
                   <div className="inline-block w-5 h-5 border-2 border-gray-700 border-t-gray-300 rounded-full animate-spin" />
-                  <p>Exploring... results will appear as cycles complete</p>
-                  <p className="text-xs text-gray-500">
-                    Cycle {status?.state?.cycle ?? 0} in progress
-                  </p>
+                  <p className="text-gray-300 font-medium">Exploring...</p>
+                  {(status?.state?.cycle ?? 0) > 0 ? (
+                    <p className="text-xs text-gray-500">
+                      Cycle {status?.state?.cycle} in progress — select a session to view previous results
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-center max-w-xs">
+                      Your research agents are working. First results appear in ~5-10 minutes.
+                      This page updates automatically.
+                    </p>
+                  )}
                 </>
               ) : hasCycles ? (
                 "Select a session or file to view"
