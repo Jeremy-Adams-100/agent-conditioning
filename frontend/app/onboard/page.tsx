@@ -150,16 +150,31 @@ export default function OnboardPage() {
         {step === 2 && vmStatus === "none" && (
           <form onSubmit={handleWolfram} className="flex flex-col gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium mb-2">
                 Wolfram Engine License Key
               </label>
-              <p className="text-xs text-gray-400 mb-2">
-                Get a free license at{" "}
-                <a href="https://www.wolfram.com/engine/" target="_blank"
-                   rel="noopener noreferrer" className="text-white underline font-medium">
-                  wolfram.com/engine
-                </a>
-              </p>
+              <ol className="text-xs text-gray-400 mb-3 list-decimal list-inside space-y-1">
+                <li>
+                  <a href="https://account.wolfram.com/login/create" target="_blank"
+                     rel="noopener noreferrer" className="text-white underline">
+                    Create a Wolfram account
+                  </a>{" "}(or log in if you have one)
+                </li>
+                <li>
+                  Go to{" "}
+                  <a href="https://www.wolfram.com/engine/" target="_blank"
+                     rel="noopener noreferrer" className="text-white underline">
+                    wolfram.com/engine
+                  </a>{" "}and click &quot;Get Free Engine&quot;
+                </li>
+                <li>
+                  In your{" "}
+                  <a href="https://user.wolfram.com/portal/products.html" target="_blank"
+                     rel="noopener noreferrer" className="text-white underline">
+                    Wolfram products page
+                  </a>, find Wolfram Engine and copy your access key
+                </li>
+              </ol>
               <input
                 type="text"
                 placeholder="XXXX-XXXX-XXXXXX"
