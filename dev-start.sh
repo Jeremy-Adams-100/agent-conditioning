@@ -27,6 +27,8 @@ export VM_AGENT_TOKEN="dev-token-local"
 export DATA_DIR="$PROJECT_ROOT/agent/data"
 export WORKING_DIR="/tmp/qed-workspace"
 export PYTHONPATH="$PROJECT_ROOT/platform"
+export EXPLORATION_CMD="$PROJECT_ROOT/platform/.venv/bin/python -m agent.exploration --score $PROJECT_ROOT/agent/exploration-score.yaml --config $PROJECT_ROOT/agent/config.yaml --state $PROJECT_ROOT/agent/data/exploration_state.json"
+export PROJECT_ROOT="$PROJECT_ROOT"
 
 echo "  [1/3] VM agent on :8080..."
 cd "$PROJECT_ROOT/platform" && uv run uvicorn vm_agent.agent:app --host 127.0.0.1 --port 8080 > /dev/null 2>&1 &

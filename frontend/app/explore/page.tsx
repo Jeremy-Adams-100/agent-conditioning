@@ -105,7 +105,7 @@ export default function ExplorePage() {
           </span>
           {tier !== "max" && (
             <a
-              href="https://claude.ai/pricing"
+              href="https://claude.com/pricing/max"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-emerald-400 hover:underline"
@@ -172,10 +172,20 @@ export default function ExplorePage() {
               type={viewing.type}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-              {hasCycles
-                ? "Select a session or file to view"
-                : "Type a topic and click Go to start exploring"}
+            <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
+              {isRunning ? (
+                <>
+                  <div className="inline-block w-5 h-5 border-2 border-gray-700 border-t-gray-300 rounded-full animate-spin" />
+                  <p>Exploring... results will appear as cycles complete</p>
+                  <p className="text-xs text-gray-500">
+                    Cycle {status?.state?.cycle ?? 0} in progress
+                  </p>
+                </>
+              ) : hasCycles ? (
+                "Select a session or file to view"
+              ) : (
+                "Type a topic and click Go to start exploring"
+              )}
             </div>
           )}
         </main>
@@ -186,7 +196,7 @@ export default function ExplorePage() {
         <button
           onClick={() => setMobilePanel("content")}
           className={`flex-1 py-2 text-xs font-medium ${
-            mobilePanel === "content" ? "text-gray-900" : "text-gray-400"
+            mobilePanel === "content" ? "text-gray-100" : "text-gray-400"
           }`}
         >
           Content

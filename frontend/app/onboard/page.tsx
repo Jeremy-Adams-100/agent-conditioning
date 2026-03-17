@@ -169,7 +169,7 @@ export default function OnboardPage() {
                 </li>
                 <li>
                   In your{" "}
-                  <a href="https://user.wolfram.com/portal/products.html" target="_blank"
+                  <a href="https://account.wolfram.com/products" target="_blank"
                      rel="noopener noreferrer" className="text-white underline">
                     Wolfram products page
                   </a>, find Wolfram Engine and copy your access key

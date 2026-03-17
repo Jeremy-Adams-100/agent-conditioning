@@ -39,7 +39,9 @@ def start(body: dict, _=Depends(_auth)):
         cmd.append(topic)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     WORKING_DIR.mkdir(parents=True, exist_ok=True)
-    _proc = subprocess.Popen(cmd, cwd=str(DATA_DIR.parent))
+    # Run from parent of DATA_DIR (project root on VM, or agent-conditioning locally)
+    cwd = os.environ.get("PROJECT_ROOT", str(DATA_DIR.parent))
+    _proc = subprocess.Popen(cmd, cwd=cwd)
     return {"status": "starting", "pid": _proc.pid}
 
 
