@@ -1,4 +1,8 @@
-# Stage 4: Backend API
+# Stage 4: Backend API — MERGED INTO STAGES 1 & 2
+
+**Note:** The backend API endpoints planned here were implemented
+as part of Stage 1 (auth + onboarding) and Stage 2 (explore + proxy).
+This document is retained as the original design reference.
 
 ## Goal
 

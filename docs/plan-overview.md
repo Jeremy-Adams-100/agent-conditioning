@@ -105,19 +105,19 @@ VMs suspend when idle (GCP native suspend — memory preserved,
 
 ## Implementation Stages
 
-| Stage | What | Details |
-|-------|------|---------|
-| 1 | User onboarding flow | Account creation, Claude/Wolfram linking |
-| 2 | VM provisioning | GCP VM setup with base image + credential injection |
-| 3 | Website frontend | Search bar, file explorer, session viewer |
-| 4 | Backend API | Auth, GCP VM lifecycle, file/session proxy |
-| 5 | Tier configuration | Free vs Max parameter tuning |
-| 6 | Polish & hardening | Error handling, monitoring, cleanup |
+| Stage | What | Status | Details |
+|-------|------|--------|---------|
+| 1 | User onboarding flow | **COMPLETE** | FastAPI backend, auth, credential linking. 15 tests. |
+| 2 | VM provisioning | **COMPLETE** | GCP integration (mock + real), VM agent, explore/proxy routers. 24 tests. Base image v3 with Wolfram Engine. |
+| 3 | Website frontend | NEXT | Next.js: search bar, file explorer, session viewer |
+| 4 | Backend API | MERGED INTO 2 | Explore + proxy endpoints built in Stage 2 |
+| 5 | Tier configuration | PENDING | Free vs Max parameter tuning |
+| 6 | Polish & hardening | PENDING | Error handling, monitoring, cleanup |
 
-Detailed plans for each stage:
+Detailed plans and references:
 - [Stage 1: User Onboarding](plan-stage1-onboarding.md)
 - [Stage 2: VM Provisioning](plan-stage2-vms.md)
 - [Stage 3: Frontend](plan-stage3-frontend.md)
-- [Stage 4: Backend API](plan-stage4-backend.md)
 - [Stage 5: Tier Configuration](plan-stage5-tiers.md)
 - [VM Provider Comparison](plan-vm-comparison.md)
+- [VM Setup Guide](vm-setup-guide.md)

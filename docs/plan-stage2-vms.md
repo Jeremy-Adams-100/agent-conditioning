@@ -1,4 +1,12 @@
-# Stage 2: VM Provisioning (GCP Compute Engine)
+# Stage 2: VM Provisioning (GCP Compute Engine) — COMPLETE
+
+**Status:** Implemented and tested. 24 tests passing (Stage 1 + 2).
+**Code:** `platform/explorer_platform/` (gcp.py, vm_client.py, provision.py, explore.py, proxy.py, idle.py)
+**VM agent:** `platform/vm_agent/agent.py`
+**Setup scripts:** `platform/vm_setup/` (install.sh, vm-startup.sh)
+**Base image:** `agent-explorer-base-v3` (Ubuntu 24.04 + Claude CLI 2.1.77 + Wolfram Engine 14.3.0 + Python 3.12 + deploy keys)
+**GCP project:** `agent-explorer-app`
+**Detailed setup reference:** [VM Setup Guide](vm-setup-guide.md)
 
 ## Goal
 

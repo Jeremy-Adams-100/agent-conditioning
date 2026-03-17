@@ -1,4 +1,7 @@
-# Stage 1: User Onboarding
+# Stage 1: User Onboarding — COMPLETE
+
+**Status:** Implemented and tested. 15 tests passing.
+**Code:** `platform/explorer_platform/` (auth.py, onboard.py, db.py, crypto.py, deps.py, app.py, config.py)
 
 ## Goal
 
