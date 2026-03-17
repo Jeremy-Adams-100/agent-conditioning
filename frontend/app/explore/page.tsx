@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getOnboardStatus, getSession, getFile } from "@/lib/api";
+import { getOnboardStatus, getSession, getFile, checkTier } from "@/lib/api";
 import { useExplorationStatus, useSessions, useFiles } from "@/lib/hooks";
 import StatusBar from "@/components/StatusBar";
 import Controls from "@/components/Controls";
@@ -19,6 +19,7 @@ type ViewItem =
 export default function ExplorePage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [tier, setTier] = useState("unknown");
   const [viewing, setViewing] = useState<ViewItem>(null);
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
 
@@ -27,7 +28,10 @@ export default function ExplorePage() {
     getOnboardStatus()
       .then((s) => {
         if (!s.onboarding_complete) router.push("/onboard");
-        else setReady(true);
+        else {
+          setReady(true);
+          setTier(s.tier);
+        }
       })
       .catch(() => router.push("/login"));
   }, [router]);
@@ -94,6 +98,19 @@ export default function ExplorePage() {
           />
         </div>
         <StatusBar status={status} />
+        <span className="text-xs text-gray-400 border border-gray-200 rounded px-2 py-0.5">
+          {tier === "max" ? "Max" : tier === "free" ? "Free" : "Free"}
+        </span>
+        {tier !== "max" && (
+          <a
+            href="https://claude.ai/pricing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-500 hover:underline"
+          >
+            Upgrade
+          </a>
+        )}
       </header>
 
       {/* Main content */}

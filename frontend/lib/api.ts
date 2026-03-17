@@ -63,6 +63,9 @@ export const clearExploration = () => post("/api/explore/clear");
 
 export const resumeExploration = () => post("/api/explore/resume");
 
+// Tier
+export const checkTier = () => post<{ tier: string; config: object }>("/api/tier/check");
+
 // Data proxy
 export const getStatus = () => get<ExplorationStatus>("/api/data/status");
 

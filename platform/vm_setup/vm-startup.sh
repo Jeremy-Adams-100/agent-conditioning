@@ -52,6 +52,29 @@ if [ -n "$WOLFRAM_KEY" ]; then
     fi
 fi
 
+# --- Write tier-specific config ---
+CONFIG_SRC=/opt/agent-conditioning/agent/config.yaml
+CONFIG_DST=/home/explorer/config.yaml
+SCORE_SRC=/opt/agent-conditioning/agent/exploration-score.yaml
+SCORE_DST=/home/explorer/exploration-score.yaml
+
+cp "$CONFIG_SRC" "$CONFIG_DST" 2>/dev/null || true
+cp "$SCORE_SRC" "$SCORE_DST" 2>/dev/null || true
+
+if [ "$TIER" = "max" ]; then
+    echo "[startup] Tier: max (opus, 1M context, 30s cooldown)"
+    sed -i 's/^model:.*/model: opus/' "$CONFIG_DST"
+    sed -i 's/^context_window:.*/context_window: 1000000/' "$CONFIG_DST"
+    sed -i 's/cycle_cooldown_seconds:.*/cycle_cooldown_seconds: 30/' "$SCORE_DST"
+else
+    echo "[startup] Tier: free (sonnet, 200k context, 120s cooldown)"
+    sed -i 's/^model:.*/model: sonnet/' "$CONFIG_DST"
+    sed -i 's/^context_window:.*/context_window: 200000/' "$CONFIG_DST"
+    sed -i 's/cycle_cooldown_seconds:.*/cycle_cooldown_seconds: 120/' "$SCORE_DST"
+fi
+
+chown explorer:explorer "$CONFIG_DST" "$SCORE_DST" 2>/dev/null || true
+
 # --- Ensure working directories exist ---
 mkdir -p /home/explorer/data /home/explorer/working
 chown -R explorer:explorer /home/explorer/data /home/explorer/working

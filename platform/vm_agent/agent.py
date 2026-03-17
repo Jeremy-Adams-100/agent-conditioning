@@ -57,6 +57,22 @@ def clear(_=Depends(_auth)):
     return {"status": "clearing"}
 
 
+@app.get("/detect-tier")
+def detect_tier(_=Depends(_auth)):
+    """Test if the user's Claude account supports opus (Max plan)."""
+    try:
+        result = subprocess.run(
+            ["claude", "-p", "--output-format", "json", "--model", "opus", "--no-session-persistence"],
+            input="Say ok",
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            return {"tier": "max"}
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return {"tier": "free"}
+
+
 @app.get("/status")
 def status(_=Depends(_auth)):
     result: dict = {"exploration_running": _proc is not None and _proc.poll() is None}
