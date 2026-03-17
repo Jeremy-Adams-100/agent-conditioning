@@ -101,7 +101,7 @@ def test_mock_gcp_create_and_info(client):
     async def _test():
         result = await create_vm("test-vm", {"key": "value"})
         assert result["name"] == "test-vm"
-        assert result["internal_ip"].startswith("10.128.0.")
+        assert result["internal_ip"] == "127.0.0.1"
 
         info = await get_vm_info(result["zone"], "test-vm")
         assert info["status"] == "RUNNING"

@@ -19,7 +19,8 @@ _mock_ip_counter = 1
 
 async def _mock_create_vm(name: str, metadata: dict) -> dict:
     global _mock_ip_counter
-    ip = f"10.128.0.{_mock_ip_counter}"
+    # In mock mode, point at localhost so a local VM agent can handle requests
+    ip = "127.0.0.1"
     _mock_ip_counter += 1
     vm = {
         "name": name,

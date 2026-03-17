@@ -31,7 +31,8 @@ async def provision_vm(user_id: str) -> None:
 
     update_user_field(conn, user_id, "vm_status", "provisioning")
 
-    vm_agent_token = secrets.token_hex(32)
+    # In mock mode, use a fixed token matching the local dev VM agent
+    vm_agent_token = "dev-token-local" if config.GCP_MOCK else secrets.token_hex(32)
     vm_name = f"explorer-{user_id[:8]}"
 
     try:
