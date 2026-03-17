@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agent Explorer",
+  title: "Q.E.D.",
   description: "Continuous autonomous research powered by Claude and Wolfram",
 };
 

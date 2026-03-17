@@ -85,7 +85,7 @@ export default function ExplorePage() {
     <div className="h-screen flex flex-col">
       {/* Top bar */}
       <header className="flex items-center gap-4 px-4 py-3 border-b border-gray-200 flex-shrink-0">
-        <span className="font-bold text-sm tracking-tight">Agent Explorer</span>
+        <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
         <div className="flex-1">
           <Controls
             isRunning={isRunning}

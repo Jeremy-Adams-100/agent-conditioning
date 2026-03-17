@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
-      <h1 className="text-4xl font-bold tracking-tight mb-2">Agent Explorer</h1>
+      <h1 className="text-4xl font-bold tracking-tight mb-2">Q.E.D.</h1>
       <p className="text-gray-500 mb-10">
         Continuous autonomous research powered by Claude and Wolfram
       </p>
