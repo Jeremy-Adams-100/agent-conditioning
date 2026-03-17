@@ -109,10 +109,10 @@ VMs suspend when idle (GCP native suspend — memory preserved,
 |-------|------|--------|---------|
 | 1 | User onboarding flow | **COMPLETE** | FastAPI backend, auth, credential linking. 15 tests. |
 | 2 | VM provisioning | **COMPLETE** | GCP integration (mock + real), VM agent, explore/proxy routers. 24 tests. Base image v3 with Wolfram Engine. |
-| 3 | Website frontend | NEXT | Next.js: search bar, file explorer, session viewer |
+| 3 | Website frontend | **COMPLETE** | Next.js (Q.E.D.): landing, auth, onboarding, explorer. |
 | 4 | Backend API | MERGED INTO 2 | Explore + proxy endpoints built in Stage 2 |
-| 5 | Tier configuration | PENDING | Free vs Max parameter tuning |
-| 6 | Polish & hardening | PENDING | Error handling, monitoring, cleanup |
+| 5 | Tier configuration | **COMPLETE** | Free/Max detection, per-tier VM config, upgrade link. |
+| 6 | Polish & hardening | PENDING | See [future-work.md](future-work.md) |
 
 Detailed plans and references:
 - [Stage 1: User Onboarding](plan-stage1-onboarding.md)
