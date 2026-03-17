@@ -14,6 +14,7 @@ from explorer_platform.explore import router as explore_router
 from explorer_platform.idle import check_idle_vms
 from explorer_platform.onboard import router as onboard_router
 from explorer_platform.proxy import router as proxy_router
+from explorer_platform.email_verify import router as email_router
 from explorer_platform.tiers import router as tier_router
 
 
@@ -24,7 +25,8 @@ async def _idle_loop():
         try:
             await check_idle_vms()
         except Exception:
-            pass  # log and continue
+            from explorer_platform.log import logger
+            logger.exception("Idle VM check failed")
 
 
 @asynccontextmanager
@@ -57,6 +59,7 @@ app.include_router(auth_router)
 app.include_router(onboard_router)
 app.include_router(explore_router)
 app.include_router(proxy_router)
+app.include_router(email_router)
 app.include_router(tier_router)
 
 

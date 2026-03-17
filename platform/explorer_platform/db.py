@@ -24,9 +24,15 @@ def init_db(db_path: Path | str) -> sqlite3.Connection:
             vm_zone         TEXT,
             vm_status       TEXT DEFAULT 'none',
             vm_internal_ip  TEXT,
-            vm_agent_token  TEXT
+            vm_agent_token  TEXT,
+            email_verified  INTEGER DEFAULT 0
         );
     """)
+    # Migration for existing databases
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     return conn
 
 
@@ -69,6 +75,7 @@ def update_user_field(
     allowed = {
         "claude_token", "wolfram_key", "tier",
         "vm_id", "vm_zone", "vm_status", "vm_internal_ip", "vm_agent_token",
+        "email_verified",
     }
     if field not in allowed:
         raise ValueError(f"Cannot update field: {field}")

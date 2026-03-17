@@ -73,5 +73,7 @@ async def provision_vm(user_id: str) -> None:
         else:
             update_user_field(conn, user_id, "vm_status", "provision_failed")
 
-    except Exception as e:
+    except Exception:
+        from explorer_platform.log import logger
+        logger.exception(f"VM provisioning failed for user {user_id[:8]}")
         update_user_field(conn, user_id, "vm_status", "provision_failed")

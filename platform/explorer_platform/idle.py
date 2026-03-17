@@ -38,8 +38,8 @@ async def check_idle_vms() -> None:
                 await gcp.suspend_vm(user["vm_zone"], user["vm_id"])
                 update_user_field(conn, user["id"], "vm_status", "suspended")
 
-        except (httpx.ConnectError, httpx.TimeoutException, Exception):
-            pass  # VM unreachable — skip this cycle
+        except Exception:
+            pass  # VM unreachable — skip this check
 
 
 def _older_than_hours(iso_timestamp: str, hours: int) -> bool:

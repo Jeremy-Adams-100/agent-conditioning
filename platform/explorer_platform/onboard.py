@@ -64,6 +64,7 @@ def onboard_status(user=Depends(get_current_user)):
         "tier": user["tier"],
         "claude_linked": user["claude_token"] is not None,
         "wolfram_linked": user["wolfram_key"] is not None,
+        "email_verified": bool(user.get("email_verified")),
         "vm_status": user["vm_status"] or "none",
         "onboarding_complete": (
             user["claude_token"] is not None

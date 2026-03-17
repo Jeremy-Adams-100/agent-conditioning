@@ -22,6 +22,7 @@ export default function ExplorePage() {
   const [tier, setTier] = useState("unknown");
   const [viewing, setViewing] = useState<ViewItem>(null);
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
+  const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
 
   // Check auth + onboarding
   useEffect(() => {
@@ -88,35 +89,37 @@ export default function ExplorePage() {
   return (
     <div className="h-screen flex flex-col">
       {/* Top bar */}
-      <header className="flex items-center gap-4 px-4 py-3 border-b border-gray-200 flex-shrink-0">
+      <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-200 flex-shrink-0">
         <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <Controls
             isRunning={isRunning}
             hasCycles={hasCycles}
             onAction={handleAction}
           />
         </div>
-        <StatusBar status={status} />
-        <span className="text-xs text-gray-400 border border-gray-200 rounded px-2 py-0.5">
-          {tier === "max" ? "Max" : tier === "free" ? "Free" : "Free"}
-        </span>
-        {tier !== "max" && (
-          <a
-            href="https://claude.ai/pricing"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-500 hover:underline"
-          >
-            Upgrade
-          </a>
-        )}
+        <div className="hidden md:flex items-center gap-2">
+          <StatusBar status={status} />
+          <span className="text-xs text-gray-400 border border-gray-200 rounded px-2 py-0.5">
+            {tier === "max" ? "Max" : "Free"}
+          </span>
+          {tier !== "max" && (
+            <a
+              href="https://claude.ai/pricing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline"
+            >
+              Upgrade
+            </a>
+          )}
+        </div>
       </header>
 
       {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar */}
-        <aside className="w-64 border-r border-gray-200 flex flex-col flex-shrink-0 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Sidebar — hidden on mobile unless toggled */}
+        <aside className={`${mobilePanel === "sidebar" ? "flex" : "hidden"} md:flex w-full md:w-64 border-r border-gray-200 flex-col flex-shrink-0 overflow-hidden`}>
           <div className="flex border-b border-gray-200">
             <button
               onClick={() => setSidebarTab("sessions")}
@@ -160,8 +163,8 @@ export default function ExplorePage() {
           </div>
         </aside>
 
-        {/* Right content */}
-        <main className="flex-1 overflow-hidden">
+        {/* Content — hidden on mobile when sidebar is shown */}
+        <main className={`${mobilePanel === "content" ? "flex" : "hidden"} md:flex flex-1 flex-col overflow-hidden`}>
           {viewing ? (
             <ContentViewer
               title={viewing.title}
@@ -177,6 +180,34 @@ export default function ExplorePage() {
           )}
         </main>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="md:hidden flex border-t border-gray-200 flex-shrink-0">
+        <button
+          onClick={() => setMobilePanel("content")}
+          className={`flex-1 py-2 text-xs font-medium ${
+            mobilePanel === "content" ? "text-gray-900" : "text-gray-400"
+          }`}
+        >
+          Content
+        </button>
+        <button
+          onClick={() => { setMobilePanel("sidebar"); setSidebarTab("sessions"); }}
+          className={`flex-1 py-2 text-xs font-medium ${
+            mobilePanel === "sidebar" && sidebarTab === "sessions" ? "text-gray-900" : "text-gray-400"
+          }`}
+        >
+          Sessions
+        </button>
+        <button
+          onClick={() => { setMobilePanel("sidebar"); setSidebarTab("files"); refreshFiles(); }}
+          className={`flex-1 py-2 text-xs font-medium ${
+            mobilePanel === "sidebar" && sidebarTab === "files" ? "text-gray-900" : "text-gray-400"
+          }`}
+        >
+          Files
+        </button>
+      </nav>
     </div>
   );
 }

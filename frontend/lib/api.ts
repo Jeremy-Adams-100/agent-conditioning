@@ -35,8 +35,8 @@ async function get<T>(path: string): Promise<T> {
 }
 
 // Auth
-export const signup = (email: string, password: string) =>
-  post<AuthResponse>("/api/auth/signup", { email, password });
+export const signup = (email: string, password: string, turnstile_token = "") =>
+  post<AuthResponse>("/api/auth/signup", { email, password, turnstile_token });
 
 export const login = (email: string, password: string) =>
   post<AuthResponse>("/api/auth/login", { email, password });
