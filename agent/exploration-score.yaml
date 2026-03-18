@@ -263,6 +263,18 @@ agents:
 
       4. REVIEW for coherence. One pass. Fix gaps, not style.
 
+      5. RENDER the final report as a PDF.
+         - Write the report as a Markdown file with LaTeX math blocks
+           ($...$ for inline, $$...$$ for display). Use Wolfram
+           TeXForm[] to convert any symbolic expressions to LaTeX.
+         - Export any figures from Wolfram as PNG files using
+           Export["figure_name.png", plot].
+         - Reference figures in Markdown as ![caption](figure_name.png).
+         - Compile to PDF:
+             pandoc report.md -o report.pdf --pdf-engine=tectonic
+         - Name the PDF: report_cycles_{start}-{end}.pdf
+           (e.g., report_cycles_1-10.pdf).
+
       You are NOT an auditor — do not re-verify results. You are NOT
       a researcher — do not open new lines of inquiry. You consolidate
       and narrate what has already been done.
