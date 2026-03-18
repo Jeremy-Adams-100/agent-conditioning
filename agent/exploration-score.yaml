@@ -283,7 +283,7 @@ agents:
            use plain ASCII tree notation instead.
 
          Compile command (exact):
-           pandoc report.md -o report.pdf --pdf-engine=tectonic
+           pandoc report.md -o report.pdf --pdf-engine=tectonic -V geometry:margin=1in
 
          Name the PDF: report_cycles_{start}-{end}.pdf
          (e.g., report_cycles_1-3.pdf).
