@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   startExploration,
   stopExploration,
@@ -14,10 +14,35 @@ interface ControlsProps {
   onAction: () => void;
 }
 
+const MAX_TOPIC_LENGTH = 10000;
+
 export default function Controls({ isRunning, hasCycles, onAction }: ControlsProps) {
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState("");
   const [message, setMessage] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea: 1 line default, snap to 4 lines when content
+  // wraps past 1 line, internal scroll beyond 4 lines
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 20; // ~text-sm line height
+    const oneLine = lineHeight + 12; // + vertical padding
+    const fourLines = lineHeight * 4 + 12;
+    const scrollHeight = el.scrollHeight;
+    if (scrollHeight <= oneLine) {
+      el.style.height = oneLine + "px";
+      el.style.overflowY = "hidden";
+    } else if (scrollHeight <= fourLines) {
+      el.style.height = fourLines + "px";
+      el.style.overflowY = "hidden";
+    } else {
+      el.style.height = fourLines + "px";
+      el.style.overflowY = "auto";
+    }
+  }, [topic]);
 
   async function handleAction(action: string) {
     setLoading(action);
@@ -47,18 +72,23 @@ export default function Controls({ isRunning, hasCycles, onAction }: ControlsPro
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         {!isRunning && (
           <>
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
               placeholder="explore [topic]"
               value={topic}
+              maxLength={MAX_TOPIC_LENGTH}
+              rows={1}
               onChange={(e) => setTopic(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && topic.trim()) handleAction("start");
+                if (e.key === "Enter" && !e.shiftKey && topic.trim()) {
+                  e.preventDefault();
+                  handleAction("start");
+                }
               }}
-              className="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none leading-5"
             />
             <button
               onClick={() => handleAction("start")}
