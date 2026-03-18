@@ -26,7 +26,7 @@ seed:
 loop:
   max_cycles: null               # null = unlimited (stop with Ctrl+C)
   cycle_cooldown_seconds: 30     # pause between cycles (rate limit headroom)
-  report_interval: 10            # reporter generates a report every N cycles
+  report_interval: 3             # reporter generates a report every N cycles
 
 # Restrict Bash to Wolfram kernel only — no python, no shell commands,
 # no file reads via cat. All file access goes through scoped file tools.
@@ -263,17 +263,30 @@ agents:
 
       4. REVIEW for coherence. One pass. Fix gaps, not style.
 
-      5. RENDER the final report as a PDF.
-         - Write the report as a Markdown file with LaTeX math blocks
-           ($...$ for inline, $$...$$ for display). Use Wolfram
-           TeXForm[] to convert any symbolic expressions to LaTeX.
-         - Export any figures from Wolfram as PNG files using
-           Export["figure_name.png", plot].
-         - Reference figures in Markdown as ![caption](figure_name.png).
-         - Compile to PDF:
-             pandoc report.md -o report.pdf --pdf-engine=tectonic
-         - Name the PDF: report_cycles_{start}-{end}.pdf
-           (e.g., report_cycles_1-10.pdf).
+      5. RENDER the final report as a PDF using pandoc + tectonic.
+         You MUST use pandoc for PDF generation. Do NOT use Wolfram
+         notebooks, wkhtmltopdf, or any other method.
+
+         Markdown conventions:
+         - Standard markdown: **bold**, *italic*, # headings, tables,
+           code blocks, bullet lists. Pandoc renders all of these.
+         - Inline math: $E = mc^2$ (rendered by LaTeX).
+         - Display equations (unnumbered): $$\hat{H}\psi = E\psi$$
+         - Display equations (numbered): use \begin{equation} ...
+           \end{equation} for important equations that deserve a
+           reference number. Pandoc passes these to LaTeX directly.
+         - Use Wolfram TeXForm[] to convert symbolic expressions
+           to LaTeX strings.
+         - Figures: Export from Wolfram as PNG via Export["fig.png", plot].
+           Reference in markdown as ![caption](fig.png).
+         - Avoid unicode box-drawing characters (├ │ └) in code blocks;
+           use plain ASCII tree notation instead.
+
+         Compile command (exact):
+           pandoc report.md -o report.pdf --pdf-engine=tectonic
+
+         Name the PDF: report_cycles_{start}-{end}.pdf
+         (e.g., report_cycles_1-3.pdf).
 
       You are NOT an auditor — do not re-verify results. You are NOT
       a researcher — do not open new lines of inquiry. You consolidate

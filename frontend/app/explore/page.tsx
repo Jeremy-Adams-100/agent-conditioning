@@ -24,14 +24,20 @@ export default function ExplorePage() {
   const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
 
-  // Check auth + onboarding
+  // Check auth + onboarding, detect tier if unknown
   useEffect(() => {
     getOnboardStatus()
       .then((s) => {
         if (!s.onboarding_complete) router.push("/onboard");
         else {
           setReady(true);
-          setTier(s.tier);
+          if (s.tier === "unknown" || !s.tier) {
+            checkTier()
+              .then((t) => setTier(t.tier))
+              .catch(() => setTier("free"));
+          } else {
+            setTier(s.tier);
+          }
         }
       })
       .catch(() => router.push("/login"));
