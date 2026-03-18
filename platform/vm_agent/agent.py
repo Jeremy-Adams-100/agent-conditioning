@@ -40,6 +40,11 @@ def start(body: dict, _=Depends(_auth)):
         cmd.append(topic)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     WORKING_DIR.mkdir(parents=True, exist_ok=True)
+    # Clear stale signal files so the new process doesn't exit immediately
+    for sig in ("exploration.stop", "exploration.clear"):
+        sig_path = DATA_DIR / sig
+        if sig_path.exists():
+            sig_path.unlink(missing_ok=True)
     # Run from parent of DATA_DIR (project root on VM, or agent-conditioning locally)
     cwd = os.environ.get("PROJECT_ROOT", str(DATA_DIR.parent))
     _proc = subprocess.Popen(cmd, cwd=cwd)
