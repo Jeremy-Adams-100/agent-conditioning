@@ -63,6 +63,9 @@ export const clearExploration = () => post("/api/explore/clear");
 
 export const resumeExploration = () => post("/api/explore/resume");
 
+export const guideExploration = (text: string) =>
+  post("/api/explore/guide", { text });
+
 // Tier
 export const checkTier = () => post<{ tier: string; config: object }>("/api/tier/check");
 

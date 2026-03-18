@@ -18,6 +18,10 @@ class StartRequest(BaseModel):
     topic: str = ""
 
 
+class GuideRequest(BaseModel):
+    text: str = ""
+
+
 async def _ensure_vm_running(user: dict, conn) -> None:
     """Resume VM if suspended. Raises if VM not provisioned."""
     status = user.get("vm_status", "none")
@@ -71,6 +75,15 @@ async def clear_exploration(user=Depends(get_current_user)):
         return await client.clear()
     except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ConnectTimeout):
         return {"status": "no_vm"}
+
+
+@router.post("/guide")
+async def guide_exploration(body: GuideRequest, user=Depends(get_current_user)):
+    client = get_vm_client(user)
+    try:
+        return await client.guide(body.text)
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ConnectTimeout):
+        raise HTTPException(502, "VM agent unreachable")
 
 
 @router.post("/resume")

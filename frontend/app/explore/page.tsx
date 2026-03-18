@@ -49,6 +49,7 @@ export default function ExplorePage() {
 
   const isRunning = status?.exploration_running ?? false;
   const hasCycles = (status?.state?.cycle ?? 0) > 0;
+  const currentCycle = status?.state?.cycle ?? 0;
 
   async function handleSelectSession(session: SessionEntry) {
     try {
@@ -108,6 +109,7 @@ export default function ExplorePage() {
           <Controls
             isRunning={isRunning}
             hasCycles={hasCycles}
+            currentCycle={currentCycle}
             onAction={handleAction}
           />
         </div>

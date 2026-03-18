@@ -6,21 +6,27 @@ import {
   stopExploration,
   clearExploration,
   resumeExploration,
+  guideExploration,
 } from "@/lib/api";
 
 interface ControlsProps {
   isRunning: boolean;
   hasCycles: boolean;
+  currentCycle: number;
   onAction: () => void;
 }
 
 const MAX_TOPIC_LENGTH = 10000;
 
-export default function Controls({ isRunning, hasCycles, onAction }: ControlsProps) {
+export default function Controls({ isRunning, hasCycles, currentCycle, onAction }: ControlsProps) {
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState("");
   const [message, setMessage] = useState("");
+  const [guideSentAtCycle, setGuideSentAtCycle] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Re-enable guidance input when cycle advances past the one we sent at
+  const guideDisabled = guideSentAtCycle !== null && currentCycle <= guideSentAtCycle;
 
   // Auto-resize textarea: 1 line default, snap to 4 lines when content
   // wraps past 1 line, internal scroll beyond 4 lines
@@ -52,11 +58,17 @@ export default function Controls({ isRunning, hasCycles, onAction }: ControlsPro
         await startExploration(topic);
         setTopic("");
         setMessage("Exploration started. Results will appear as cycles complete.");
+      } else if (action === "guide") {
+        await guideExploration(topic);
+        setTopic("");
+        setGuideSentAtCycle(currentCycle);
+        setMessage("Guidance queued for next cycle.");
       } else if (action === "stop") {
         await stopExploration();
         setMessage("Stopping after current cycle...");
       } else if (action === "clear") {
         await clearExploration();
+        setGuideSentAtCycle(null);
         setMessage("Cleared.");
       } else if (action === "resume") {
         await resumeExploration();
@@ -109,13 +121,38 @@ export default function Controls({ isRunning, hasCycles, onAction }: ControlsPro
           </>
         )}
         {isRunning && (
-          <button
-            onClick={() => handleAction("stop")}
-            disabled={loading === "stop"}
-            className="px-4 py-1.5 border border-red-700 text-red-400 text-sm rounded-lg hover:bg-red-950 transition-colors"
-          >
-            Stop
-          </button>
+          <>
+            <textarea
+              ref={textareaRef}
+              placeholder="guide next cycle..."
+              value={topic}
+              maxLength={MAX_TOPIC_LENGTH}
+              rows={1}
+              disabled={guideDisabled}
+              onChange={(e) => setTopic(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && topic.trim() && !guideDisabled) {
+                  e.preventDefault();
+                  handleAction("guide");
+                }
+              }}
+              className="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none leading-5 disabled:opacity-40"
+            />
+            <button
+              onClick={() => handleAction("guide")}
+              disabled={!topic.trim() || guideDisabled || loading === "guide"}
+              className="px-4 py-1.5 bg-white text-gray-900 text-sm rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
+            >
+              {loading === "guide" ? "..." : "Go"}
+            </button>
+            <button
+              onClick={() => handleAction("stop")}
+              disabled={loading === "stop"}
+              className="px-4 py-1.5 border border-red-700 text-red-400 text-sm rounded-lg hover:bg-red-950 transition-colors"
+            >
+              Stop
+            </button>
+          </>
         )}
         <button
           onClick={() => handleAction("clear")}

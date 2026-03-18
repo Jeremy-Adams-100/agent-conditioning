@@ -31,6 +31,11 @@ class VMClient:
         r.raise_for_status()
         return r.json()
 
+    async def guide(self, text: str) -> dict:
+        r = await self._client.post("/guide", json={"text": text})
+        r.raise_for_status()
+        return r.json()
+
     async def get_status(self) -> dict:
         r = await self._client.get("/status")
         r.raise_for_status()

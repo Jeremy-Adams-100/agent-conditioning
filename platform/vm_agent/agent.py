@@ -65,6 +65,16 @@ def clear(_=Depends(_auth)):
     return {"status": "clearing"}
 
 
+@app.post("/guide")
+def guide(body: dict, _=Depends(_auth)):
+    text = body.get("text", "").strip()
+    if not text:
+        raise HTTPException(400, "No guidance text provided")
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "exploration.guide").write_text(text)
+    return {"status": "guidance_queued"}
+
+
 @app.get("/detect-tier")
 def detect_tier(_=Depends(_auth)):
     """Test if the user's Claude account supports opus (Max plan)."""

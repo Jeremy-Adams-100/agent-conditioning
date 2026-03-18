@@ -84,6 +84,20 @@ def _check_signal_files(data_dir: Path) -> None:
         print("[exploration] Stop signal received.", flush=True)
 
 
+def _consume_guide_file(data_dir: Path) -> str | None:
+    """Read and delete the guide file if present. Returns guidance text or None."""
+    guide_file = data_dir / "exploration.guide"
+    if guide_file.exists():
+        try:
+            text = guide_file.read_text().strip()
+            guide_file.unlink(missing_ok=True)
+            if text:
+                return text
+        except OSError:
+            pass
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Score loading
 # ---------------------------------------------------------------------------
@@ -781,6 +795,14 @@ def run_exploration(
         cycle_start = time.monotonic()
         cycle_topic = None  # set by researcher, inherited by worker/auditor
         cycle_ok = True
+
+        # Check for live guidance from user
+        guidance = _consume_guide_file(data_dir)
+        if guidance:
+            results["live_guidance"] = guidance
+            print(f"[exploration] Live guidance received ({len(guidance)} chars)", flush=True)
+        else:
+            results["live_guidance"] = "[No live guidance this cycle.]"
 
         print(f"\n{'='*60}", flush=True)
         print(f"[exploration] === Cycle {cycle} ===", flush=True)

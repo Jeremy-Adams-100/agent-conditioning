@@ -45,7 +45,7 @@ agents:
     philosophy: research
     framework: staged
     mcp: true
-    inputs: [directive, audit_report]
+    inputs: [directive, audit_report, live_guidance]
     outputs: [research_brief]
     role: |
       You are the exploration director. You receive a broad research
@@ -104,7 +104,7 @@ agents:
     philosophy: efficient
     framework: staged
     mcp: true
-    inputs: [directive, research_brief]
+    inputs: [directive, research_brief, live_guidance]
     outputs: [work_output]
     role: |
       You are the builder and runner. You receive a research brief
