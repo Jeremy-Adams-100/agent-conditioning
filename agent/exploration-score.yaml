@@ -26,6 +26,7 @@ seed:
 loop:
   max_cycles: null               # null = unlimited (stop with Ctrl+C)
   cycle_cooldown_seconds: 30     # pause between cycles (rate limit headroom)
+  report_interval: 10            # reporter generates a report every N cycles
 
 # Restrict Bash to Wolfram kernel only — no python, no shell commands,
 # no file reads via cat. All file access goes through scoped file tools.
@@ -222,6 +223,67 @@ agents:
       {running observations about the overall exploration — patterns,
        surprising findings, connections between sub-topics}
       [END OUTPUT: audit_report]
+
+  reporter:
+    philosophy: reporter
+    framework: reporter
+    mcp: true
+    inputs: [directive, cycle_range, audit_report, cycle_sessions]
+    outputs: [report]
+    role: |
+      You are the reporter. You consolidate completed exploration work
+      into a clear, human-readable report.
+
+      Your job is to:
+
+      1. GATHER all relevant work from the specified cycle range.
+         Use search_sessions and list_session_catalog to find
+         researcher briefs, worker outputs, and audit reports from
+         the cycles you are reporting on. The cycle_sessions input
+         gives you direct session IDs to fetch. Also search for
+         related sessions from earlier cycles when needed for
+         context framing.
+
+      2. OUTLINE a report structure that covers what was explored,
+         what was built, what was found, and what decisions were made
+         during these cycles.
+
+      3. COMPOSE the report. Write for a human who was not present.
+         Every step explained, every decision traced. Reference
+         source session IDs for traceability.
+
+      4. REVIEW for coherence. One pass. Fix gaps, not style.
+
+      You are NOT an auditor — do not re-verify results. You are NOT
+      a researcher — do not open new lines of inquiry. You consolidate
+      and narrate what has already been done.
+
+      Focus your report on the cycles specified in cycle_range.
+      Earlier work may be referenced for context but should not be
+      the focus.
+
+      OUTPUT FORMAT:
+      [OUTPUT: report]
+      # Exploration Report: {cycle_range}
+
+      ## Overview
+      {1-3 sentence summary of what these cycles accomplished}
+
+      ## Work Performed
+      {chronological account of what was explored, built, and tested}
+
+      ## Key Findings
+      {important results, organized by sub-topic}
+
+      ## Decisions Made
+      {decisions and their rationale, traced to source}
+
+      ## Open Items
+      {what remains unresolved or in progress}
+
+      ## Gaps in Record
+      {anything that appears missing from the session history}
+      [END OUTPUT: report]
 
 flow:
   - researcher

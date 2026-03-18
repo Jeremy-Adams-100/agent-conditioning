@@ -222,7 +222,10 @@ def _call_exploration_agent(
 
     # Session: create or resume
     session_id = agent_sessions.get(agent_name)
-    if session_id:
+    was_resume = session_id is not None
+    summary = None  # track compaction summary for restoration on failure
+
+    if was_resume:
         cmd.extend(["--resume", session_id])
     else:
         session_id = str(uuid.uuid4())
@@ -275,9 +278,17 @@ def _call_exploration_agent(
             env=env,
         )
     except subprocess.TimeoutExpired:
+        if not was_resume:
+            agent_sessions.pop(agent_name, None)
+            if summary is not None:
+                agent_summaries[agent_name] = summary
         return _error_result(agent_name, agent_def, "CLI timed out")
 
     if proc.returncode != 0:
+        if not was_resume:
+            agent_sessions.pop(agent_name, None)
+            if summary is not None:
+                agent_summaries[agent_name] = summary
         return _error_result(agent_name, agent_def, proc.stderr[:500])
 
     try:
@@ -366,6 +377,7 @@ def _compact_agent_session(
     # Store summary in sessions.db
     session_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
+    db_ok = False
     try:
         store_session(
             conn,
@@ -380,19 +392,26 @@ def _compact_agent_session(
             record_type="compaction",
         )
         last_session_id = session_id
+        db_ok = True
     except Exception as e:
         print(f"[exploration]   Compaction DB write failed: {e}", flush=True)
 
-    # Reset session: delete old UUID, store summary for bootstrap
-    del agent_sessions[agent_name]
-    agent_summaries[agent_name] = summary
-
-    print(
-        f"[exploration]   {agent_name} compacted "
-        f"(~{len(summary)//4} tokens summary). "
-        f"Fresh session on next cycle.",
-        flush=True,
-    )
+    if db_ok:
+        # Reset session: delete old UUID, store summary for bootstrap
+        del agent_sessions[agent_name]
+        agent_summaries[agent_name] = summary
+        print(
+            f"[exploration]   {agent_name} compacted "
+            f"(~{len(summary)//4} tokens summary). "
+            f"Fresh session on next cycle.",
+            flush=True,
+        )
+    else:
+        print(
+            f"[exploration]   {agent_name} compaction DB failed, "
+            f"keeping current session.",
+            flush=True,
+        )
 
     return last_session_id
 
@@ -546,6 +565,118 @@ FALLBACK_AUDIT = (
 
 
 # ---------------------------------------------------------------------------
+# Reporter agent
+# ---------------------------------------------------------------------------
+
+
+def _run_reporter(
+    reporter_def: dict,
+    task: str,
+    config: dict,
+    results: dict,
+    score_inputs: dict,
+    agent_sessions: dict,
+    agent_summaries: dict,
+    conn,
+    cycle: int,
+    last_session_id: str | None,
+    cycle_range_start: int,
+    cycle_range_end: int,
+    cycle_session_log: list,
+    context_window: int,
+    compact_at: int,
+) -> str | None:
+    """Run the reporter agent to generate a periodic report.
+
+    Called every report_interval cycles and on stop. Follows the same
+    session persistence and auto-compact patterns as cycle agents.
+    On failure, logs and returns without blocking exploration.
+
+    Returns updated last_session_id.
+    """
+    cycle_range_str = f"cycles {cycle_range_start}-{cycle_range_end}"
+
+    # Build session pointers for the reporter
+    session_lines = []
+    for entry in cycle_session_log:
+        session_lines.append(
+            f"Cycle {entry['cycle']}: "
+            f"{entry['agent']}={entry['session_id']}"
+        )
+    cycle_sessions_str = (
+        "\n".join(session_lines) if session_lines
+        else "No session records available."
+    )
+
+    # Reporter gets its own copy of results with extra inputs
+    reporter_results = dict(results)
+    reporter_results["cycle_range"] = cycle_range_str
+    reporter_results["cycle_sessions"] = cycle_sessions_str
+
+    print(
+        f"\n[exploration] === Reporter ({cycle_range_str}) ===",
+        flush=True,
+    )
+
+    is_resume = "reporter" in agent_sessions
+    print(
+        f"[exploration] {'Resuming' if is_resume else 'Starting'}: "
+        f"reporter"
+        f"{' (' + agent_sessions['reporter'][:8] + '...)' if is_resume else ''}",
+        flush=True,
+    )
+
+    result = _call_exploration_agent(
+        agent_name="reporter",
+        agent_def=reporter_def,
+        task=task,
+        config=config,
+        results=reporter_results,
+        score_inputs=score_inputs,
+        agent_sessions=agent_sessions,
+        agent_summaries=agent_summaries,
+    )
+
+    if result["status"] == "ok":
+        usage = result.get("usage", {})
+        dur = result.get("duration_ms", 0) / 1000
+        total_ctx = _total_context_tokens(usage)
+        print(
+            f"[exploration]   reporter: ok "
+            f"({dur:.1f}s, ctx:{total_ctx:,}tok, "
+            f"out:{usage.get('output_tokens', 0)}tok)",
+            flush=True,
+        )
+
+        output_text = "\n\n".join(result["outputs"].values())
+        last_session_id = _store_agent_output(
+            conn, "reporter", reporter_def, output_text,
+            cycle, last_session_id,
+            current_topic="exploration_report",
+        )
+
+        # Auto-compact check
+        if total_ctx >= compact_at:
+            print(
+                f"[exploration]   reporter context "
+                f"{total_ctx:,}/{context_window:,} "
+                f"({total_ctx/context_window:.0%}) — compacting...",
+                flush=True,
+            )
+            last_session_id = _compact_agent_session(
+                "reporter", reporter_def, config,
+                agent_sessions, agent_summaries,
+                conn, cycle, last_session_id,
+            )
+    else:
+        err = result.get("error", "unknown")
+        print(f"[exploration]   reporter: FAILED — {err}", flush=True)
+        print("[exploration]   Report skipped. Continuing.", flush=True)
+
+    return last_session_id
+
+
+# ---------------------------------------------------------------------------
 # Main exploration loop
 # ---------------------------------------------------------------------------
 
@@ -576,6 +707,8 @@ def run_exploration(
     agents = score["agents"]
     task = task_override or score["task"]
     score_inputs = {"directive": task}
+    report_interval = loop_cfg.get("report_interval", 10)
+    reporter_def = agents.get("reporter")
 
     # Apply score-level tool restrictions (overrides config.yaml for all agents)
     if "allowed_tools" in score:
@@ -619,12 +752,16 @@ def run_exploration(
         print("[exploration] Starting fresh exploration", flush=True)
 
     total_failure_streak = 0
+    cycles_since_last_report = 0
+    cycle_session_log = []
 
     # Banner
     print(f"[exploration] Task: {task.strip()[:120]}", flush=True)
     print(f"[exploration] Flow: {' -> '.join(flow)}", flush=True)
     print(f"[exploration] Max cycles: {max_cycles or 'unlimited'}", flush=True)
     print(f"[exploration] Compact at: {compact_at:,} tokens per agent", flush=True)
+    if reporter_def:
+        print(f"[exploration] Reporter: every {report_interval} cycles + on stop", flush=True)
     print(f"[exploration] Cooldown: {base_cooldown}s | Ctrl+C to stop", flush=True)
     print(f"[exploration] Signals: touch {data_dir}/exploration.stop|clear", flush=True)
     print("=" * 60, flush=True)
@@ -704,6 +841,10 @@ def run_exploration(
                     cycle, last_session_id,
                     current_topic=cycle_topic,
                 )
+                cycle_session_log.append({
+                    "cycle": cycle, "agent": agent_name,
+                    "session_id": last_session_id,
+                })
 
                 # --- Auto-compact check ---
                 if total_ctx >= compact_at:
@@ -741,6 +882,10 @@ def run_exploration(
                         conn, agent_name, agent_def, FALLBACK_AUDIT,
                         cycle, last_session_id,
                     )
+                    cycle_session_log.append({
+                        "cycle": cycle, "agent": agent_name,
+                        "session_id": last_session_id,
+                    })
                 else:
                     # Middle agent (worker) failed — pass failure marker
                     for out_name in agent_def.get("outputs", []):
@@ -761,6 +906,8 @@ def run_exploration(
                     _sleep_interruptible(60, data_dir)
 
         # --- End of cycle bookkeeping ---
+        cycles_since_last_report += 1
+
         if _stop_requested:
             break
 
@@ -786,6 +933,23 @@ def run_exploration(
         elapsed = time.monotonic() - cycle_start
         print(f"[exploration] Cycle {cycle} done ({elapsed:.0f}s)", flush=True)
 
+        # --- Reporter check (every report_interval cycles) ---
+        if (reporter_def and cycles_since_last_report >= report_interval
+                and not _stop_requested):
+            range_start = cycle - cycles_since_last_report + 1
+            last_session_id = _run_reporter(
+                reporter_def, task, config, results, score_inputs,
+                agent_sessions, agent_summaries,
+                conn, cycle, last_session_id,
+                range_start, cycle,
+                cycle_session_log,
+                context_window, compact_at,
+            )
+            cycles_since_last_report = 0
+            cycle_session_log = []
+            save_state(state_path, cycle, results, consecutive_failures,
+                       last_session_id, agent_sessions, agent_summaries)
+
         # Cooldown
         cooldown = adaptive_cooldown(base_cooldown, total_failure_streak)
         if cooldown > 0:
@@ -803,6 +967,18 @@ def run_exploration(
         print(f"\n[exploration] Cleared after {cycle} cycles.", flush=True)
         print("[exploration] Context reset. Sessions.db history preserved.", flush=True)
     else:
+        # Run final report if there are unreported cycles
+        if reporter_def and cycles_since_last_report > 0:
+            range_start = cycle - cycles_since_last_report + 1
+            last_session_id = _run_reporter(
+                reporter_def, task, config, results, score_inputs,
+                agent_sessions, agent_summaries,
+                conn, cycle, last_session_id,
+                range_start, cycle,
+                cycle_session_log,
+                context_window, compact_at,
+            )
+
         # Stop: save current state for resume
         save_state(state_path, cycle, results, consecutive_failures,
                    last_session_id, agent_sessions, agent_summaries)
