@@ -75,11 +75,13 @@ def _check_signal_files(data_dir: Path) -> None:
 
     if clear_file.exists():
         clear_file.unlink()
+        (data_dir / "exploration.guide").unlink(missing_ok=True)
         _stop_requested = True
         _clear_requested = True
         print("[exploration] Clear signal received.", flush=True)
     elif stop_file.exists():
         stop_file.unlink()
+        (data_dir / "exploration.guide").unlink(missing_ok=True)
         _stop_requested = True
         print("[exploration] Stop signal received.", flush=True)
 

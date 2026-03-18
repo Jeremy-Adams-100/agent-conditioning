@@ -41,7 +41,7 @@ def start(body: dict, _=Depends(_auth)):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     WORKING_DIR.mkdir(parents=True, exist_ok=True)
     # Clear stale signal files so the new process doesn't exit immediately
-    for sig in ("exploration.stop", "exploration.clear"):
+    for sig in ("exploration.stop", "exploration.clear", "exploration.guide"):
         sig_path = DATA_DIR / sig
         if sig_path.exists():
             sig_path.unlink(missing_ok=True)
