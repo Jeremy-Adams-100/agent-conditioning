@@ -26,16 +26,18 @@ function fileName(path: string): string {
 export default function FileTree({ files, selectedPath, onSelect }: FileTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Filter to .wls files only
-  const wlsFiles = files.filter((f) => f.path.endsWith(".wls"));
+  // Filter to .wls and .pdf files
+  const visibleFiles = files.filter(
+    (f) => f.path.endsWith(".wls") || f.path.endsWith(".pdf")
+  );
 
-  if (wlsFiles.length === 0) {
-    return <p className="text-xs text-gray-500 p-2">No .wls files yet</p>;
+  if (visibleFiles.length === 0) {
+    return <p className="text-xs text-gray-500 p-2">No files yet</p>;
   }
 
   // Group by date (newest first)
   const byDate = new Map<string, FileEntry[]>();
-  for (const f of wlsFiles) {
+  for (const f of visibleFiles) {
     const date = formatDate(f.modified);
     if (!byDate.has(date)) byDate.set(date, []);
     byDate.get(date)!.push(f);

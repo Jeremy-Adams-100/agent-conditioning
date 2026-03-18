@@ -4,6 +4,7 @@ interface ContentViewerProps {
   title: string;
   content: string;
   type: "session" | "file";
+  downloadUrl?: string;
 }
 
 function downloadFile(filename: string, content: string) {
@@ -16,8 +17,9 @@ function downloadFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ContentViewer({ title, content, type }: ContentViewerProps) {
+export default function ContentViewer({ title, content, type, downloadUrl }: ContentViewerProps) {
   const filename = title.split("/").pop() ?? title;
+  const isPdf = filename.endsWith(".pdf");
 
   return (
     <div className="h-full flex flex-col">
@@ -27,17 +29,35 @@ export default function ContentViewer({ title, content, type }: ContentViewerPro
           <h2 className="text-sm font-medium text-gray-200 truncate">{title}</h2>
         </div>
         {type === "file" && (
-          <button
-            onClick={() => downloadFile(filename, content)}
-            className="text-xs text-gray-400 border border-gray-700 rounded px-2 py-1 hover:text-gray-200 hover:border-gray-500 transition-colors"
-          >
-            Download
-          </button>
+          isPdf && downloadUrl ? (
+            <a
+              href={downloadUrl}
+              download={filename}
+              className="text-xs text-gray-400 border border-gray-700 rounded px-2 py-1 hover:text-gray-200 hover:border-gray-500 transition-colors"
+            >
+              Download
+            </a>
+          ) : (
+            <button
+              onClick={() => downloadFile(filename, content)}
+              className="text-xs text-gray-400 border border-gray-700 rounded px-2 py-1 hover:text-gray-200 hover:border-gray-500 transition-colors"
+            >
+              Download
+            </button>
+          )
         )}
       </div>
-      <pre className="flex-1 overflow-auto p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap">
-        {content}
-      </pre>
+      {isPdf && downloadUrl ? (
+        <embed
+          src={downloadUrl}
+          type="application/pdf"
+          className="flex-1 w-full"
+        />
+      ) : (
+        <pre className="flex-1 overflow-auto p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap">
+          {content}
+        </pre>
+      )}
     </div>
   );
 }

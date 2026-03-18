@@ -81,3 +81,6 @@ export const getFiles = () => get<FileEntry[]>("/api/data/files");
 
 export const getFile = (path: string) =>
   get<FileContent>(`/api/data/files/${path}`);
+
+export const getFileDownloadUrl = (path: string) =>
+  `/api/data/files/${path}/download`;

@@ -34,21 +34,32 @@ if ! command -v wolfram &>/dev/null; then
     echo "Skipping for now — install before snapshotting."
 fi
 
+# --- Install Pandoc + Tectonic (PDF report generation) ---
+echo "[5/9] Installing Pandoc..."
+curl -sL https://github.com/jgm/pandoc/releases/download/3.6.4/pandoc-3.6.4-1-amd64.deb -o /tmp/pandoc.deb
+sudo dpkg -i /tmp/pandoc.deb
+rm /tmp/pandoc.deb
+
+echo "[6/9] Installing Tectonic..."
+curl -sL https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz \
+    | sudo tar xz -C /usr/local/bin tectonic
+sudo chmod +x /usr/local/bin/tectonic
+
 # --- Install agent-conditioning + auto-compact ---
-echo "[5/7] Installing agent-conditioning..."
+echo "[7/9] Installing agent-conditioning..."
 sudo mkdir -p /opt/agent-conditioning /opt/auto-compact
 # These will be copied from the dev machine before snapshotting
 # For now, create the directory structure
 sudo chown -R explorer:explorer /opt/agent-conditioning /opt/auto-compact
 
 # --- Install VM agent dependencies ---
-echo "[6/7] Installing Python dependencies..."
+echo "[8/9] Installing Python dependencies..."
 sudo -u explorer python3 -m venv /opt/agent-conditioning/.venv
 sudo -u explorer /opt/agent-conditioning/.venv/bin/pip install -q \
     fastapi uvicorn[standard] httpx pyyaml bcrypt cryptography anthropic
 
 # --- Install startup script ---
-echo "[7/7] Installing startup script..."
+echo "[9/9] Installing startup script..."
 sudo cp /tmp/vm-startup.sh /opt/vm-startup.sh
 sudo chmod +x /opt/vm-startup.sh
 

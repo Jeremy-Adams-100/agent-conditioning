@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="VM Agent")
 
@@ -109,6 +110,14 @@ def list_files(_=Depends(_auth)):
             except OSError:
                 pass
     return files
+
+
+@app.get("/files/{path:path}/download")
+def download_file(path: str, _=Depends(_auth)):
+    full = (WORKING_DIR / path).resolve()
+    if not full.is_file() or not full.is_relative_to(WORKING_DIR.resolve()):
+        raise HTTPException(404, "File not found")
+    return FileResponse(full, filename=full.name)
 
 
 @app.get("/files/{path:path}")

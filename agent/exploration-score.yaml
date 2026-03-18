@@ -228,6 +228,15 @@ agents:
     philosophy: reporter
     framework: reporter
     mcp: true
+    allowed_tools:
+      - Read
+      - Write
+      - Edit
+      - Glob
+      - Grep
+      - "Bash(/data/home/jadams2/bin/wolfram *)"
+      - "Bash(pandoc *)"
+      - WebSearch
     inputs: [directive, cycle_range, audit_report, cycle_sessions]
     outputs: [report]
     role: |

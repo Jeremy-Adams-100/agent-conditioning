@@ -46,6 +46,11 @@ class VMClient:
         r.raise_for_status()
         return r.json()
 
+    async def download_file(self, path: str) -> httpx.Response:
+        r = await self._client.get(f"/files/{path}/download")
+        r.raise_for_status()
+        return r
+
     async def list_sessions(self, query: str | None = None, limit: int = 20) -> list:
         params = {"limit": limit}
         if query:

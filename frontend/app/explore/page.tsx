@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getOnboardStatus, getSession, getFile, checkTier } from "@/lib/api";
+import { getOnboardStatus, getSession, getFile, getFileDownloadUrl, checkTier } from "@/lib/api";
 import { useExplorationStatus, useSessions, useFiles } from "@/lib/hooks";
 import StatusBar from "@/components/StatusBar";
 import Controls from "@/components/Controls";
@@ -13,7 +13,7 @@ import type { SessionEntry } from "@/lib/types";
 
 type ViewItem =
   | { type: "session"; id: string; title: string; content: string }
-  | { type: "file"; path: string; title: string; content: string }
+  | { type: "file"; path: string; title: string; content: string; downloadUrl?: string }
   | null;
 
 export default function ExplorePage() {
@@ -64,6 +64,13 @@ export default function ExplorePage() {
   }
 
   async function handleSelectFile(path: string) {
+    if (path.endsWith(".pdf")) {
+      setViewing({
+        type: "file", path, title: path, content: "",
+        downloadUrl: getFileDownloadUrl(path),
+      });
+      return;
+    }
     try {
       const f = await getFile(path);
       setViewing({ type: "file", path, title: path, content: f.content });
@@ -170,6 +177,7 @@ export default function ExplorePage() {
               title={viewing.title}
               content={viewing.content}
               type={viewing.type}
+              downloadUrl={viewing.type === "file" ? viewing.downloadUrl : undefined}
             />
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm gap-2">

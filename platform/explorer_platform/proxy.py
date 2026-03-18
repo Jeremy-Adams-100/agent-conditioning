@@ -4,8 +4,11 @@ Returns graceful defaults when VM agent is unreachable (mock mode,
 VM suspended, or not yet provisioned).
 """
 
+from io import BytesIO
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from explorer_platform.deps import get_current_user
 from explorer_platform.vm_client import get_vm_client
@@ -55,6 +58,25 @@ async def proxy_files(user=Depends(get_current_user)):
     except (HTTPException, httpx.ConnectError, httpx.ConnectTimeout,
             httpx.TimeoutException, httpx.HTTPStatusError):
         return []
+
+
+@router.get("/files/{path:path}/download")
+async def proxy_file_download(path: str, user=Depends(get_current_user)):
+    try:
+        client = get_vm_client(user)
+        r = await client.download_file(path)
+        return StreamingResponse(
+            BytesIO(r.content),
+            media_type=r.headers.get("content-type", "application/octet-stream"),
+            headers={
+                "content-disposition": r.headers.get(
+                    "content-disposition", f'attachment; filename="{path.split("/")[-1]}"'
+                ),
+            },
+        )
+    except (HTTPException, httpx.ConnectError, httpx.ConnectTimeout,
+            httpx.TimeoutException):
+        raise HTTPException(404, "File not available")
 
 
 @router.get("/files/{path:path}")
