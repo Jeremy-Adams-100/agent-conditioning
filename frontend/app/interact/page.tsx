@@ -5,17 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   getOnboardStatus,
   checkTier,
-  interactQuery,
-  interactClear,
   getInteractFile,
   getInteractFileDownloadUrl,
 } from "@/lib/api";
 import { useInteractFiles } from "@/lib/hooks";
+import { useInteract } from "@/lib/interact-context";
 import NavTabs from "@/components/NavTabs";
 import FileTree from "@/components/FileTree";
 import ContentViewer from "@/components/ContentViewer";
-
-type Message = { role: "user" | "assistant"; content: string };
 
 type ViewItem =
   | { type: "file"; path: string; title: string; content: string; downloadUrl?: string }
@@ -27,16 +24,15 @@ export default function InteractPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [tier, setTier] = useState("unknown");
-  const [messages, setMessages] = useState<Message[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [contextWarning, setContextWarning] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "reports">("logs");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
   const [viewing, setViewing] = useState<ViewItem>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Shared state from context — survives page navigation
+  const { messages, loading, error, contextWarning, submitQuery, clearSession } = useInteract();
 
   const { data: files = [], mutate: refreshFiles } = useInteractFiles();
 
@@ -64,6 +60,15 @@ export default function InteractPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Refresh files when loading completes (query finished)
+  const prevLoading = useRef(loading);
+  useEffect(() => {
+    if (prevLoading.current && !loading) {
+      refreshFiles();
+    }
+    prevLoading.current = loading;
+  }, [loading, refreshFiles]);
+
   // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
@@ -85,48 +90,14 @@ export default function InteractPage() {
     }
   }, [prompt]);
 
-  async function handleQuery() {
+  function handleQuery() {
     if (!prompt.trim() || loading) return;
-    const userPrompt = prompt;
+    submitQuery(prompt);
     setPrompt("");
-    setLoading(true);
-    setError(null);
-    setMessages((prev) => [...prev, { role: "user", content: userPrompt }]);
-
-    try {
-      const res = await interactQuery(userPrompt);
-      if (res.error) {
-        setError(res.message || "An error occurred.");
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `Error: ${res.message || res.error}` },
-        ]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: res.result || "(empty response)" },
-        ]);
-      }
-      setContextWarning(res.context_warning ?? null);
-      refreshFiles();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Query failed";
-      setError(msg);
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}` }]);
-    } finally {
-      setLoading(false);
-    }
   }
 
   async function handleClear() {
-    try {
-      await interactClear();
-    } catch {
-      // best effort
-    }
-    setMessages([]);
-    setError(null);
-    setContextWarning(null);
+    await clearSession();
     setViewing(null);
     refreshFiles();
   }
