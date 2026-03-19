@@ -21,13 +21,13 @@ export $(grep -v '^#' "$PROJECT_ROOT/platform/.env" | xargs) 2>/dev/null || true
 
 # Ensure data directories exist
 mkdir -p "$PROJECT_ROOT/agent/data" "$PROJECT_ROOT/agent/output" /tmp/qed-workspace
-export INTERACT_WORKSPACE="$(dirname "$WORKING_DIR")/interact"
-mkdir -p "$INTERACT_WORKSPACE"
 
 # 1. VM Agent (port 8080)
 export VM_AGENT_TOKEN="dev-token-local"
 export DATA_DIR="$PROJECT_ROOT/agent/data"
 export WORKING_DIR="/data/home/jadams2/wolfram-bridge"
+export INTERACT_WORKSPACE="$(dirname "$WORKING_DIR")/interact"
+mkdir -p "$INTERACT_WORKSPACE"
 export PYTHONPATH="$PROJECT_ROOT/platform"
 export EXPLORATION_CMD="$PROJECT_ROOT/platform/.venv/bin/python -m agent.exploration --score $PROJECT_ROOT/agent/exploration-score.yaml --config $PROJECT_ROOT/agent/config.yaml --state $PROJECT_ROOT/agent/data/exploration_state.json"
 export PROJECT_ROOT="$PROJECT_ROOT"
