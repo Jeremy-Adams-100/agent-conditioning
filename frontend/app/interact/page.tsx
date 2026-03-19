@@ -157,17 +157,62 @@ export default function InteractPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      {/* Top bar */}
+      {/* Top bar — prompt bar in header, matching explore page layout */}
       <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-800 flex-shrink-0">
         <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
         <NavTabs current="interact" />
-        <div className="flex-1" />
+        <div className="flex-1 min-w-0 flex items-start gap-2">
+          <textarea
+            ref={textareaRef}
+            placeholder="Ask a question or run a computation..."
+            value={prompt}
+            maxLength={MAX_PROMPT_LENGTH}
+            rows={1}
+            disabled={loading}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && prompt.trim() && !loading) {
+                e.preventDefault();
+                handleQuery();
+              }
+            }}
+            className="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none leading-5 disabled:opacity-40"
+          />
+          <button
+            onClick={handleQuery}
+            disabled={!prompt.trim() || loading}
+            className="px-4 py-1.5 bg-white text-gray-900 text-sm rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
+          >
+            {loading ? "..." : "Go"}
+          </button>
+          <button
+            onClick={handleClear}
+            disabled={loading}
+            className="px-3 py-1.5 text-gray-500 text-sm hover:text-gray-300 transition-colors disabled:opacity-30"
+          >
+            Clear
+          </button>
+        </div>
         <div className="hidden md:flex items-center gap-2">
           <span className="text-xs text-gray-500 border border-gray-700 rounded px-2 py-0.5">
             {tier === "max" ? "Max" : "Free"}
           </span>
         </div>
       </header>
+
+      {/* Context warning banner */}
+      {contextWarning && (
+        <div className="px-4 py-2 bg-yellow-950 border-b border-yellow-800 text-xs text-yellow-300 flex-shrink-0">
+          {contextWarning}
+        </div>
+      )}
+
+      {/* Error banner */}
+      {error && (
+        <div className="px-4 py-2 bg-red-950 border-b border-red-800 text-xs text-red-300 flex-shrink-0">
+          {error}
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
@@ -240,81 +285,30 @@ export default function InteractPage() {
               />
             </>
           ) : (
-            <>
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.length === 0 && !loading && (
-                  <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-                    Ask a question or run a computation
-                  </div>
-                )}
-                {messages.map((msg, i) => (
-                  <div key={i} className={`${msg.role === "user" ? "text-gray-300" : "text-gray-100"}`}>
-                    <span className="text-xs text-gray-500 font-medium uppercase">
-                      {msg.role === "user" ? "You" : "Assistant"}
-                    </span>
-                    <pre className="mt-1 text-sm whitespace-pre-wrap font-mono leading-relaxed">
-                      {msg.content}
-                    </pre>
-                  </div>
-                ))}
-                {loading && (
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <div className="w-4 h-4 border-2 border-gray-700 border-t-gray-300 rounded-full animate-spin" />
-                    Working...
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Context warning banner */}
-              {contextWarning && (
-                <div className="px-4 py-2 bg-yellow-950 border-t border-yellow-800 text-xs text-yellow-300">
-                  {contextWarning}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 && !loading && (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm">
+                  Ask a question or run a computation
                 </div>
               )}
-
-              {/* Error banner */}
-              {error && (
-                <div className="px-4 py-2 bg-red-950 border-t border-red-800 text-xs text-red-300">
-                  {error}
+              {messages.map((msg, i) => (
+                <div key={i} className={`${msg.role === "user" ? "text-gray-300" : "text-gray-100"}`}>
+                  <span className="text-xs text-gray-500 font-medium uppercase">
+                    {msg.role === "user" ? "You" : "Assistant"}
+                  </span>
+                  <pre className="mt-1 text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                    {msg.content}
+                  </pre>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex items-center gap-2 text-gray-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-gray-700 border-t-gray-300 rounded-full animate-spin" />
+                  Working...
                 </div>
               )}
-
-              {/* Prompt bar */}
-              <div className="border-t border-gray-800 px-4 py-3 flex items-start gap-2">
-                <textarea
-                  ref={textareaRef}
-                  placeholder="Ask a question or run a computation..."
-                  value={prompt}
-                  maxLength={MAX_PROMPT_LENGTH}
-                  rows={1}
-                  disabled={loading}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && prompt.trim() && !loading) {
-                      e.preventDefault();
-                      handleQuery();
-                    }
-                  }}
-                  className="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none leading-5 disabled:opacity-40"
-                />
-                <button
-                  onClick={handleQuery}
-                  disabled={!prompt.trim() || loading}
-                  className="px-4 py-1.5 bg-white text-gray-900 text-sm rounded-lg font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
-                >
-                  {loading ? "..." : "Go"}
-                </button>
-                <button
-                  onClick={handleClear}
-                  disabled={loading}
-                  className="px-3 py-1.5 text-gray-500 text-sm hover:text-gray-300 transition-colors disabled:opacity-30"
-                >
-                  Clear
-                </button>
-              </div>
-            </>
+              <div ref={messagesEndRef} />
+            </div>
           )}
         </main>
       </div>
