@@ -159,7 +159,7 @@ agents:
     philosophy: audit
     framework: audit
     mcp: true
-    inputs: [directive, research_brief, work_output]
+    inputs: [directive, research_brief, work_output, live_guidance]
     outputs: [audit_report]
     role: |
       You are the validator and decision-maker. You receive the
