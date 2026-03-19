@@ -18,14 +18,14 @@ type ViewItem =
   | { type: "file"; path: string; title: string; content: string; downloadUrl?: string }
   | null;
 
-const MAX_PROMPT_LENGTH = 10000;
+const MAX_PROMPT_LENGTH = 1000;
 
 export default function InteractPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [tier, setTier] = useState("unknown");
   const [prompt, setPrompt] = useState("");
-  const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "reports">("logs");
+  const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "figures">("logs");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
   const [viewing, setViewing] = useState<ViewItem>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -103,7 +103,7 @@ export default function InteractPage() {
   }
 
   async function handleSelectFile(path: string) {
-    if (path.endsWith(".pdf")) {
+    if (path.endsWith(".pdf") || path.endsWith(".png")) {
       setViewing({
         type: "file", path, title: path, content: "",
         downloadUrl: getInteractFileDownloadUrl(path),
@@ -200,7 +200,7 @@ export default function InteractPage() {
                     : "text-gray-400 hover:text-gray-300"
                 }`}
               >
-                {tab === "logs" ? "Logs" : tab === "files" ? "Files" : "Reports"}
+                {tab === "logs" ? "Logs" : tab === "files" ? "Files" : "Figures"}
               </button>
             ))}
           </div>
@@ -223,13 +223,13 @@ export default function InteractPage() {
                 emptyMessage="No .wls files yet"
               />
             )}
-            {sidebarTab === "reports" && (
+            {sidebarTab === "figures" && (
               <FileTree
                 files={files}
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
-                extensions={[".pdf"]}
-                emptyMessage="No reports yet"
+                extensions={[".png", ".pdf"]}
+                emptyMessage="No figures yet"
               />
             )}
           </div>
@@ -302,7 +302,7 @@ export default function InteractPage() {
               mobilePanel === "sidebar" && sidebarTab === tab ? "text-gray-100" : "text-gray-400"
             }`}
           >
-            {tab === "logs" ? "Logs" : tab === "files" ? "Files" : "Reports"}
+            {tab === "logs" ? "Logs" : tab === "files" ? "Files" : "Figures"}
           </button>
         ))}
       </nav>

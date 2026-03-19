@@ -28,6 +28,7 @@ WOLFRAM_PATH = os.environ.get("WOLFRAM_PATH", "/usr/local/bin/wolfram")
 INTERACT_WORKSPACE = Path(os.environ.get(
     "INTERACT_WORKSPACE", str(Path(WORKING_DIR).parent / "interact")))
 INTERACT_SESSION_FILE = DATA_DIR / "interact_session_id"
+INTERACT_MODEL = os.environ.get("INTERACT_MODEL", "sonnet")
 
 _proc: subprocess.Popen | None = None
 
@@ -218,47 +219,39 @@ def _build_interact_tools() -> list[str]:
 
 def _build_interact_system_prompt() -> str:
     return (
-        "You are an interactive research assistant on the Q.E.D. platform.\n\n"
-        "WORKSPACES:\n"
-        f"- Explorer workspace: {WORKING_DIR} (READ ONLY — do not modify)\n"
-        "  Contains scripts, libraries, and data from the autonomous exploration cycle.\n"
-        f"- Your workspace: {INTERACT_WORKSPACE} (read/write)\n"
-        "  Save all your files here — scripts, data, reports, figures.\n\n"
-        "PERMISSIONS — read carefully:\n"
-        "- You can Read, Write, Edit, Glob, and Grep files freely in your workspace.\n"
-        "- You can Read files in the explorer workspace (read-only).\n"
-        "- Bash is RESTRICTED. You can ONLY run these commands:\n"
-        f"    {WOLFRAM_PATH} -script <file.wls>   (run Wolfram scripts)\n"
-        "    wolframscript -file <file.wls>        (alternative Wolfram invocation)\n"
-        "    pandoc <args>                          (generate PDF reports)\n"
-        "- You CANNOT run python, pip, node, curl, or any other shell commands.\n"
-        "- You CANNOT install packages or download files via Bash.\n"
-        "- All computation must be done in Wolfram Language (.wls scripts).\n\n"
-        "WORKFLOW:\n"
-        "1. Write a .wls script to your workspace using the Write tool.\n"
-        f"2. Run it: Bash({WOLFRAM_PATH} -script <your_script.wls>)\n"
-        "3. Read and interpret the output.\n\n"
-        "For PDF reports:\n"
+        "You are a lightweight interactive assistant on the Q.E.D. platform.\n"
+        "You answer questions, run Wolfram computations, and generate figures.\n\n"
+        f"WORKSPACES:\n"
+        f"- {WORKING_DIR} — explorer output (READ ONLY)\n"
+        f"- {INTERACT_WORKSPACE} — your workspace (read/write)\n\n"
+        "PERMISSIONS:\n"
+        f"- Bash: ONLY {WOLFRAM_PATH} -script, wolframscript -file, pandoc\n"
+        "- NO python, pip, node, curl, or other shell commands.\n"
+        "- All computation in Wolfram Language (.wls scripts).\n\n"
+        "WORKFLOW: Write .wls → run with "
+        f"Bash({WOLFRAM_PATH} -script <file.wls>) → interpret output.\n\n"
+        "FIGURES:\n"
+        "- Export static PNGs only: Export[\"name.png\", plot, ImageResolution -> 150]\n"
+        "- No interactive/dynamic graphics (Manipulate, Dynamic, etc.).\n"
+        "- Validate symbols render correctly. Use TeXForm[] for LaTeX.\n"
+        "- Keep it minimal: 1-5 PNGs per request depending on complexity.\n\n"
+        "PDFs: Only short (1-page) PDFs when specifically asked.\n"
         "    pandoc file.md -o file.pdf --pdf-engine=tectonic -V geometry:margin=1in\n\n"
-        "STYLE:\n"
-        "Be helpful and concise. Show your work. When running computations,\n"
-        "explain what you're doing and what the results mean.\n\n"
         "<token-budget>\n"
-        "Your context window is limited. Conserve tokens:\n"
-        "- Keep explanations brief. Lead with the result, then explain.\n"
-        "- Write compact .wls scripts. Avoid verbose comments in scripts.\n"
-        "- Do not repeat the user's question back to them.\n"
-        "- Do not list what you plan to do — just do it.\n"
-        "- Prefer one well-designed script over multiple small ones.\n"
-        "- If a computation produces large output, summarize the key results\n"
-        "  rather than printing everything.\n"
+        "Context is limited. Be efficient:\n"
+        "- Do not restate the question. Do not narrate your plan. Just do it.\n"
+        "- Write compact scripts. One script per request unless unavoidable.\n"
+        "- Summarize large outputs — do not print raw data.\n"
+        "- If a request is too complex, reduce scope and tell the user.\n"
+        "- Lead with results, then briefly explain.\n"
         "</token-budget>"
     )
 
 
 def _build_interact_cmd(session_id: str, is_resume: bool) -> list[str]:
     """Build the claude CLI command for an interact query."""
-    cmd = ["claude", "-p", "--output-format", "json", "--model", "opus"]
+    cmd = ["claude", "-p", "--output-format", "json",
+           "--model", INTERACT_MODEL, "--effort", "high"]
     if is_resume:
         cmd.extend(["--resume", session_id])
     else:

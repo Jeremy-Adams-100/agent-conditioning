@@ -74,11 +74,13 @@ if [ "$TIER" = "max" ]; then
     sed -i 's/^model:.*/model: opus/' "$CONFIG_DST"
     sed -i 's/^context_window:.*/context_window: 1000000/' "$CONFIG_DST"
     sed -i 's/cycle_cooldown_seconds:.*/cycle_cooldown_seconds: 30/' "$SCORE_DST"
+    echo "INTERACT_MODEL=sonnet" >> /home/explorer/.env
 else
     echo "[startup] Tier: free (sonnet, 200k context, 1000s cooldown)"
     sed -i 's/^model:.*/model: sonnet/' "$CONFIG_DST"
     sed -i 's/^context_window:.*/context_window: 200000/' "$CONFIG_DST"
     sed -i 's/cycle_cooldown_seconds:.*/cycle_cooldown_seconds: 1000/' "$SCORE_DST"
+    echo "INTERACT_MODEL=haiku" >> /home/explorer/.env
 fi
 
 chown explorer:explorer "$CONFIG_DST" "$SCORE_DST" 2>/dev/null || true

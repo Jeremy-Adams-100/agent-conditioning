@@ -20,6 +20,8 @@ function downloadFile(filename: string, content: string) {
 export default function ContentViewer({ title, content, type, downloadUrl }: ContentViewerProps) {
   const filename = title.split("/").pop() ?? title;
   const isPdf = filename.endsWith(".pdf");
+  const isImage = filename.endsWith(".png") || filename.endsWith(".jpg") || filename.endsWith(".jpeg");
+  const isBinary = (isPdf || isImage) && !!downloadUrl;
 
   return (
     <div className="h-full flex flex-col">
@@ -29,7 +31,7 @@ export default function ContentViewer({ title, content, type, downloadUrl }: Con
           <h2 className="text-sm font-medium text-gray-200 truncate">{title}</h2>
         </div>
         {type === "file" && (
-          isPdf && downloadUrl ? (
+          isBinary ? (
             <a
               href={downloadUrl}
               download={filename}
@@ -53,6 +55,10 @@ export default function ContentViewer({ title, content, type, downloadUrl }: Con
           type="application/pdf"
           className="flex-1 w-full"
         />
+      ) : isImage && downloadUrl ? (
+        <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-gray-900">
+          <img src={downloadUrl} alt={filename} className="max-w-full" />
+        </div>
       ) : (
         <pre className="flex-1 overflow-auto p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap">
           {content}
