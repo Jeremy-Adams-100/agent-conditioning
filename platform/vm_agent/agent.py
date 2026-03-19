@@ -245,6 +245,19 @@ def _build_interact_system_prompt() -> str:
     )
 
 
+def _build_interact_cmd(session_id: str, is_resume: bool) -> list[str]:
+    """Build the claude CLI command for an interact query."""
+    cmd = ["claude", "-p", "--output-format", "json", "--model", "opus"]
+    if is_resume:
+        cmd.extend(["--resume", session_id])
+    else:
+        cmd.extend(["--session-id", session_id])
+        cmd.extend(["--system-prompt", _build_interact_system_prompt()])
+    for tool in _build_interact_tools():
+        cmd.extend(["--allowedTools", tool])
+    return cmd
+
+
 @app.post("/interact/query")
 def interact_query(body: dict, _=Depends(_auth)):
     prompt = body.get("prompt", "").strip()
@@ -253,36 +266,42 @@ def interact_query(body: dict, _=Depends(_auth)):
 
     INTERACT_WORKSPACE.mkdir(parents=True, exist_ok=True)
 
-    # Session: resume or create
-    cmd = ["claude", "-p", "--output-format", "json", "--model", "opus"]
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    run_kwargs = dict(
+        input=prompt, capture_output=True, text=True,
+        timeout=600, cwd=str(INTERACT_WORKSPACE), env=env,
+    )
 
-    if INTERACT_SESSION_FILE.exists():
+    # Session: resume existing or create new
+    is_resume = INTERACT_SESSION_FILE.exists()
+    if is_resume:
         session_id = INTERACT_SESSION_FILE.read_text().strip()
-        cmd.extend(["--resume", session_id])
     else:
         session_id = str(uuid.uuid4())
         INTERACT_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
         INTERACT_SESSION_FILE.write_text(session_id)
-        cmd.extend(["--session-id", session_id])
-        cmd.extend(["--system-prompt", _build_interact_system_prompt()])
-
-    # Tool permissions
-    for tool in _build_interact_tools():
-        cmd.extend(["--allowedTools", tool])
-
-    env = os.environ.copy()
-    env.pop("CLAUDECODE", None)
 
     try:
         proc = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True,
-            timeout=600, cwd=str(INTERACT_WORKSPACE), env=env,
+            _build_interact_cmd(session_id, is_resume), **run_kwargs,
         )
     except subprocess.TimeoutExpired:
         return {"error": "timeout", "message": "Query timed out after 10 minutes."}
 
+    # If resume failed (stale/dead session), retry once with a fresh session
+    if proc.returncode != 0 and is_resume:
+        INTERACT_SESSION_FILE.unlink(missing_ok=True)
+        session_id = str(uuid.uuid4())
+        INTERACT_SESSION_FILE.write_text(session_id)
+        try:
+            proc = subprocess.run(
+                _build_interact_cmd(session_id, False), **run_kwargs,
+            )
+        except subprocess.TimeoutExpired:
+            return {"error": "timeout", "message": "Query timed out after 10 minutes."}
+
     if proc.returncode != 0:
-        # Session is likely dead — delete so next query starts fresh
         INTERACT_SESSION_FILE.unlink(missing_ok=True)
         return {
             "error": "agent_error",
