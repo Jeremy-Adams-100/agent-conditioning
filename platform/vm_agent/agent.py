@@ -240,8 +240,19 @@ def _build_interact_system_prompt() -> str:
         "3. Read and interpret the output.\n\n"
         "For PDF reports:\n"
         "    pandoc file.md -o file.pdf --pdf-engine=tectonic -V geometry:margin=1in\n\n"
+        "STYLE:\n"
         "Be helpful and concise. Show your work. When running computations,\n"
-        "explain what you're doing and what the results mean."
+        "explain what you're doing and what the results mean.\n\n"
+        "<token-budget>\n"
+        "Your context window is limited. Conserve tokens:\n"
+        "- Keep explanations brief. Lead with the result, then explain.\n"
+        "- Write compact .wls scripts. Avoid verbose comments in scripts.\n"
+        "- Do not repeat the user's question back to them.\n"
+        "- Do not list what you plan to do — just do it.\n"
+        "- Prefer one well-designed script over multiple small ones.\n"
+        "- If a computation produces large output, summarize the key results\n"
+        "  rather than printing everything.\n"
+        "</token-budget>"
     )
 
 
@@ -325,8 +336,8 @@ def interact_query(body: dict, _=Depends(_auth)):
         + usage.get("cache_creation_input_tokens", 0)
         + usage.get("output_tokens", 0)
     )
-    # Context window depends on tier (200k free, 1M max); use model usage if available
-    model_usage = usage.get("modelUsage", {})
+    # Read context window from modelUsage (top-level envelope, not inside usage)
+    model_usage = envelope.get("modelUsage", {})
     context_window = 200_000
     for model_info in model_usage.values():
         if isinstance(model_info, dict) and model_info.get("contextWindow"):
