@@ -21,7 +21,7 @@ export default function ExplorePage() {
   const [ready, setReady] = useState(false);
   const [tier, setTier] = useState("unknown");
   const [viewing, setViewing] = useState<ViewItem>(null);
-  const [sidebarTab, setSidebarTab] = useState<"sessions" | "files">("sessions");
+  const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "reports">("logs");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
 
   // Check auth + onboarding, detect tier if unknown
@@ -137,14 +137,14 @@ export default function ExplorePage() {
         <aside className={`${mobilePanel === "sidebar" ? "flex" : "hidden"} md:flex w-full md:w-64 border-r border-gray-800 flex-col flex-shrink-0 overflow-hidden`}>
           <div className="flex border-b border-gray-800">
             <button
-              onClick={() => setSidebarTab("sessions")}
+              onClick={() => setSidebarTab("logs")}
               className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
-                sidebarTab === "sessions"
+                sidebarTab === "logs"
                   ? "text-gray-100 border-b-2 border-gray-100"
                   : "text-gray-400 hover:text-gray-300"
               }`}
             >
-              Sessions
+              Logs
             </button>
             <button
               onClick={() => {
@@ -159,9 +159,22 @@ export default function ExplorePage() {
             >
               Files
             </button>
+            <button
+              onClick={() => {
+                setSidebarTab("reports");
+                refreshFiles();
+              }}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                sidebarTab === "reports"
+                  ? "text-gray-100 border-b-2 border-gray-100"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              Reports
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {sidebarTab === "sessions" && (
+            {sidebarTab === "logs" && (
               <SessionList
                 sessions={sessions}
                 selectedId={viewing?.type === "session" ? viewing.id : null}
@@ -173,6 +186,17 @@ export default function ExplorePage() {
                 files={files}
                 selectedPath={viewing?.type === "file" ? viewing.path : null}
                 onSelect={handleSelectFile}
+                extensions={[".wls"]}
+                emptyMessage="No .wls files yet"
+              />
+            )}
+            {sidebarTab === "reports" && (
+              <FileTree
+                files={files}
+                selectedPath={viewing?.type === "file" ? viewing.path : null}
+                onSelect={handleSelectFile}
+                extensions={[".pdf"]}
+                emptyMessage="No reports yet"
               />
             )}
           </div>
@@ -205,7 +229,7 @@ export default function ExplorePage() {
                   )}
                 </>
               ) : hasCycles ? (
-                "Select a session or file to view"
+                "Select a log, file, or report to view"
               ) : (
                 "Type a topic and click Go to start exploring"
               )}
@@ -225,20 +249,28 @@ export default function ExplorePage() {
           Content
         </button>
         <button
-          onClick={() => { setMobilePanel("sidebar"); setSidebarTab("sessions"); }}
+          onClick={() => { setMobilePanel("sidebar"); setSidebarTab("logs"); }}
           className={`flex-1 py-2 text-xs font-medium ${
-            mobilePanel === "sidebar" && sidebarTab === "sessions" ? "text-gray-900" : "text-gray-400"
+            mobilePanel === "sidebar" && sidebarTab === "logs" ? "text-gray-100" : "text-gray-400"
           }`}
         >
-          Sessions
+          Logs
         </button>
         <button
           onClick={() => { setMobilePanel("sidebar"); setSidebarTab("files"); refreshFiles(); }}
           className={`flex-1 py-2 text-xs font-medium ${
-            mobilePanel === "sidebar" && sidebarTab === "files" ? "text-gray-900" : "text-gray-400"
+            mobilePanel === "sidebar" && sidebarTab === "files" ? "text-gray-100" : "text-gray-400"
           }`}
         >
           Files
+        </button>
+        <button
+          onClick={() => { setMobilePanel("sidebar"); setSidebarTab("reports"); refreshFiles(); }}
+          className={`flex-1 py-2 text-xs font-medium ${
+            mobilePanel === "sidebar" && sidebarTab === "reports" ? "text-gray-100" : "text-gray-400"
+          }`}
+        >
+          Reports
         </button>
       </nav>
     </div>

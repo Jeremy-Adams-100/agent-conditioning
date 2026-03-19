@@ -7,6 +7,8 @@ interface FileTreeProps {
   files: FileEntry[];
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  extensions?: string[];
+  emptyMessage?: string;
 }
 
 function formatSize(bytes: number): string {
@@ -23,16 +25,19 @@ function fileName(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
-export default function FileTree({ files, selectedPath, onSelect }: FileTreeProps) {
+export default function FileTree({
+  files, selectedPath, onSelect,
+  extensions = [".wls", ".pdf"],
+  emptyMessage = "No files yet",
+}: FileTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Filter to .wls and .pdf files
   const visibleFiles = files.filter(
-    (f) => f.path.endsWith(".wls") || f.path.endsWith(".pdf")
+    (f) => extensions.some((ext) => f.path.endsWith(ext))
   );
 
   if (visibleFiles.length === 0) {
-    return <p className="text-xs text-gray-500 p-2">No files yet</p>;
+    return <p className="text-xs text-gray-500 p-2">{emptyMessage}</p>;
   }
 
   // Group by date (newest first)
