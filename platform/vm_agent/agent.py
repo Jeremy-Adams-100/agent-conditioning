@@ -196,16 +196,20 @@ def _save_interact_log(prompt: str, response: str) -> None:
 
 
 def _build_interact_tools() -> list[str]:
-    """Build --allowedTools flags for the interact agent."""
-    wd = str(WORKING_DIR).lstrip("/")
-    iw = str(INTERACT_WORKSPACE).lstrip("/")
-    wl = WOLFRAM_PATH
+    """Build --allowedTools flags for the interact agent.
+
+    Write/Edit are unscoped (CWD enforcement prevents writes outside the
+    interact workspace). Read/Glob/Grep are unscoped to allow reading
+    both the explorer and interact workspaces. Bash is restricted to
+    wolfram + pandoc only.
+
+    Note: path-scoped --allowedTools (e.g. Write(//path/**)) does NOT
+    auto-approve in -p mode — only unscoped tool names do. CWD-based
+    enforcement is the effective workspace isolation mechanism.
+    """
     return [
-        f"Read(//{wd}/**)", f"Read(//{iw}/**)",
-        f"Write(//{iw}/**)", f"Edit(//{iw}/**)",
-        f"Glob(//{wd}/**)", f"Glob(//{iw}/**)",
-        f"Grep(//{wd}/**)", f"Grep(//{iw}/**)",
-        f"Bash({wl} *)", "Bash(pandoc *)", "WebSearch",
+        "Read", "Write", "Edit", "Glob", "Grep",
+        f"Bash({WOLFRAM_PATH} *)", "Bash(pandoc *)", "WebSearch",
     ]
 
 
