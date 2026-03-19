@@ -73,7 +73,7 @@ class VMClient:
 
     async def interact_query(self, prompt: str) -> dict:
         r = await self._client.post(
-            "/interact/query", json={"prompt": prompt}, timeout=600.0,
+            "/interact/query", json={"prompt": prompt}, timeout=3600.0,
         )
         r.raise_for_status()
         return r.json()

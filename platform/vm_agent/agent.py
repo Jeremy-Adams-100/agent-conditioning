@@ -270,7 +270,7 @@ def interact_query(body: dict, _=Depends(_auth)):
     env.pop("CLAUDECODE", None)
     run_kwargs = dict(
         input=prompt, capture_output=True, text=True,
-        timeout=600, cwd=str(INTERACT_WORKSPACE), env=env,
+        timeout=3600, cwd=str(INTERACT_WORKSPACE), env=env,
     )
 
     # Session: resume existing or create new
@@ -287,7 +287,7 @@ def interact_query(body: dict, _=Depends(_auth)):
             _build_interact_cmd(session_id, is_resume), **run_kwargs,
         )
     except subprocess.TimeoutExpired:
-        return {"error": "timeout", "message": "Query timed out after 10 minutes."}
+        return {"error": "timeout", "message": "Query timed out."}
 
     # If resume failed (stale/dead session), retry once with a fresh session
     if proc.returncode != 0 and is_resume:
@@ -299,7 +299,7 @@ def interact_query(body: dict, _=Depends(_auth)):
                 _build_interact_cmd(session_id, False), **run_kwargs,
             )
         except subprocess.TimeoutExpired:
-            return {"error": "timeout", "message": "Query timed out after 10 minutes."}
+            return {"error": "timeout", "message": "Query timed out."}
 
     if proc.returncode != 0:
         INTERACT_SESSION_FILE.unlink(missing_ok=True)
