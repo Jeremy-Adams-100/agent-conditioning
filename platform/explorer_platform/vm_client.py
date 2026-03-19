@@ -69,6 +69,35 @@ class VMClient:
         r.raise_for_status()
         return r.json()
 
+    # --- Interact agent ---
+
+    async def interact_query(self, prompt: str) -> dict:
+        r = await self._client.post(
+            "/interact/query", json={"prompt": prompt}, timeout=600.0,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def interact_clear(self) -> dict:
+        r = await self._client.post("/interact/clear")
+        r.raise_for_status()
+        return r.json()
+
+    async def interact_list_files(self) -> list:
+        r = await self._client.get("/interact/files")
+        r.raise_for_status()
+        return r.json()
+
+    async def interact_get_file(self, path: str) -> dict:
+        r = await self._client.get(f"/interact/files/{path}")
+        r.raise_for_status()
+        return r.json()
+
+    async def interact_download_file(self, path: str) -> httpx.Response:
+        r = await self._client.get(f"/interact/files/{path}/download")
+        r.raise_for_status()
+        return r
+
     async def close(self):
         await self._client.aclose()
 

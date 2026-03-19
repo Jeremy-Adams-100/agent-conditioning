@@ -34,3 +34,10 @@ export function useFiles() {
     revalidateOnFocus: false,
   });
 }
+
+// Interact files (on demand, not polling)
+export function useInteractFiles() {
+  return useSWR<FileEntry[]>("/api/interact/files", fetcher, {
+    revalidateOnFocus: false,
+  });
+}

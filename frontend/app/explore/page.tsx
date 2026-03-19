@@ -9,6 +9,7 @@ import Controls from "@/components/Controls";
 import SessionList from "@/components/SessionList";
 import FileTree from "@/components/FileTree";
 import ContentViewer from "@/components/ContentViewer";
+import NavTabs from "@/components/NavTabs";
 import type { SessionEntry } from "@/lib/types";
 
 type ViewItem =
@@ -105,6 +106,7 @@ export default function ExplorePage() {
       {/* Top bar */}
       <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-800 flex-shrink-0">
         <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
+        <NavTabs current="explore" />
         <div className="flex-1 min-w-0">
           <Controls
             isRunning={isRunning}

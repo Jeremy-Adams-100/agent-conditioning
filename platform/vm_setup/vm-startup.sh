@@ -34,6 +34,7 @@ VM_AGENT_TOKEN=${VM_AGENT_TOKEN}
 DATA_DIR=/home/explorer/data
 WORKING_DIR=/opt/wolfram-bridge/workspace
 WOLFRAM_PATH=/usr/local/bin/wolfram
+INTERACT_WORKSPACE=/opt/wolfram-bridge/interact
 EOF
 chown explorer:explorer /home/explorer/.env
 chmod 600 /home/explorer/.env
@@ -83,7 +84,7 @@ fi
 chown explorer:explorer "$CONFIG_DST" "$SCORE_DST" 2>/dev/null || true
 
 # --- Ensure working directories exist ---
-mkdir -p /home/explorer/data /opt/wolfram-bridge/workspace
-chown -R explorer:explorer /home/explorer/data /opt/wolfram-bridge/workspace
+mkdir -p /home/explorer/data /opt/wolfram-bridge/workspace /opt/wolfram-bridge/interact
+chown -R explorer:explorer /home/explorer/data /opt/wolfram-bridge/workspace /opt/wolfram-bridge/interact
 
 echo "[startup] Done."

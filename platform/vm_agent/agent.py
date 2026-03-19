@@ -1,6 +1,6 @@
 """VM Agent — lightweight HTTP server running on each user's VM.
 
-Exposes exploration control and file/session access over HTTP.
+Exposes exploration control, interact chat, and file/session access over HTTP.
 Secured with a bearer token. Runs standalone via uvicorn.
 
 Usage:
@@ -11,6 +11,8 @@ Usage:
 import json
 import os
 import subprocess
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Header
@@ -22,6 +24,10 @@ TOKEN = os.environ.get("VM_AGENT_TOKEN", "")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/home/explorer/data"))
 WORKING_DIR = Path(os.environ.get("WORKING_DIR", "/home/explorer/working"))
 EXPLORATION_CMD = os.environ.get("EXPLORATION_CMD", "python -m agent.exploration")
+WOLFRAM_PATH = os.environ.get("WOLFRAM_PATH", "/usr/local/bin/wolfram")
+INTERACT_WORKSPACE = Path(os.environ.get(
+    "INTERACT_WORKSPACE", str(Path(WORKING_DIR).parent / "interact")))
+INTERACT_SESSION_FILE = DATA_DIR / "interact_session_id"
 
 _proc: subprocess.Popen | None = None
 
@@ -175,3 +181,147 @@ def get_session(session_id: str, _=Depends(_auth)):
         return dict(s)
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Interact agent — independent chat session
+# ---------------------------------------------------------------------------
+
+def _save_interact_log(prompt: str, response: str) -> None:
+    now = datetime.now(timezone.utc)
+    log_dir = INTERACT_WORKSPACE / "logs" / now.strftime("%Y-%m-%d")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{now.strftime('%H%M%S')}.md"
+    log_path.write_text(f"# Query\n\n{prompt}\n\n# Response\n\n{response}\n")
+
+
+def _build_interact_tools() -> list[str]:
+    """Build --allowedTools flags for the interact agent."""
+    wd = str(WORKING_DIR).lstrip("/")
+    iw = str(INTERACT_WORKSPACE).lstrip("/")
+    wl = WOLFRAM_PATH
+    return [
+        f"Read(//{wd}/**)", f"Read(//{iw}/**)",
+        f"Write(//{iw}/**)", f"Edit(//{iw}/**)",
+        f"Glob(//{wd}/**)", f"Glob(//{iw}/**)",
+        f"Grep(//{wd}/**)", f"Grep(//{iw}/**)",
+        f"Bash({wl} *)", "Bash(pandoc *)", "WebSearch",
+    ]
+
+
+def _build_interact_system_prompt() -> str:
+    return (
+        "You are an interactive research assistant on the Q.E.D. platform.\n\n"
+        "WORKSPACES:\n"
+        f"- Explorer workspace: {WORKING_DIR} (READ ONLY — do not modify)\n"
+        "  Contains scripts, libraries, and data from the autonomous exploration cycle.\n"
+        f"- Your workspace: {INTERACT_WORKSPACE} (read/write)\n"
+        "  Save all your files here — scripts, data, reports, figures.\n\n"
+        "TOOLS:\n"
+        f"- Wolfram Language: write .wls scripts to your workspace, run with {WOLFRAM_PATH}\n"
+        "- pandoc + tectonic for PDF reports:\n"
+        "    pandoc file.md -o file.pdf --pdf-engine=tectonic -V geometry:margin=1in\n"
+        "- WebSearch for looking things up\n\n"
+        "Be helpful and concise. Show your work. When running computations,\n"
+        "explain what you're doing and what the results mean."
+    )
+
+
+@app.post("/interact/query")
+def interact_query(body: dict, _=Depends(_auth)):
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        raise HTTPException(400, "No prompt provided")
+
+    INTERACT_WORKSPACE.mkdir(parents=True, exist_ok=True)
+
+    # Session: resume or create
+    cmd = ["claude", "-p", "--output-format", "json", "--model", "opus"]
+
+    if INTERACT_SESSION_FILE.exists():
+        session_id = INTERACT_SESSION_FILE.read_text().strip()
+        cmd.extend(["--resume", session_id])
+    else:
+        session_id = str(uuid.uuid4())
+        INTERACT_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        INTERACT_SESSION_FILE.write_text(session_id)
+        cmd.extend(["--session-id", session_id])
+        cmd.extend(["--system-prompt", _build_interact_system_prompt()])
+
+    # Tool permissions
+    for tool in _build_interact_tools():
+        cmd.extend(["--allowedTools", tool])
+
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+
+    try:
+        proc = subprocess.run(
+            cmd, input=prompt, capture_output=True, text=True,
+            timeout=600, cwd=str(INTERACT_WORKSPACE), env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return {"error": "timeout", "message": "Query timed out after 10 minutes."}
+
+    if proc.returncode != 0:
+        # Session is likely dead — delete so next query starts fresh
+        INTERACT_SESSION_FILE.unlink(missing_ok=True)
+        return {
+            "error": "agent_error",
+            "message": proc.stderr[:500] if proc.stderr else "Agent returned an error.",
+        }
+
+    try:
+        envelope = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return {"error": "parse_error", "message": "Failed to parse agent response."}
+
+    result_text = envelope.get("result", "")
+    usage = envelope.get("usage", {})
+
+    _save_interact_log(prompt, result_text)
+
+    return {"result": result_text, "usage": usage, "session_id": session_id}
+
+
+@app.post("/interact/clear")
+def interact_clear(_=Depends(_auth)):
+    INTERACT_SESSION_FILE.unlink(missing_ok=True)
+    return {"status": "cleared"}
+
+
+@app.get("/interact/files")
+def interact_list_files(_=Depends(_auth)):
+    INTERACT_WORKSPACE.mkdir(parents=True, exist_ok=True)
+    files = []
+    for p in sorted(INTERACT_WORKSPACE.rglob("*")):
+        if p.is_file():
+            try:
+                st = p.stat()
+                files.append({
+                    "path": str(p.relative_to(INTERACT_WORKSPACE)),
+                    "size": st.st_size,
+                    "modified": st.st_mtime,
+                })
+            except OSError:
+                pass
+    return files
+
+
+@app.get("/interact/files/{path:path}/download")
+def interact_download_file(path: str, _=Depends(_auth)):
+    full = (INTERACT_WORKSPACE / path).resolve()
+    if not full.is_file() or not full.is_relative_to(INTERACT_WORKSPACE.resolve()):
+        raise HTTPException(404, "File not found")
+    return FileResponse(full, filename=full.name)
+
+
+@app.get("/interact/files/{path:path}")
+def interact_get_file(path: str, _=Depends(_auth)):
+    full = (INTERACT_WORKSPACE / path).resolve()
+    if not full.is_file() or not full.is_relative_to(INTERACT_WORKSPACE.resolve()):
+        raise HTTPException(404, "File not found")
+    try:
+        return {"path": path, "content": full.read_text(errors="replace")}
+    except OSError:
+        raise HTTPException(500, "Could not read file")

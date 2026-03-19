@@ -87,3 +87,18 @@ export const getFile = (path: string) =>
 
 export const getFileDownloadUrl = (path: string) =>
   `/api/data/files/${path}/download`;
+
+// Interact
+export const interactQuery = (prompt: string) =>
+  post<{ result?: string; usage?: object; session_id?: string; error?: string; message?: string }>(
+    "/api/interact/query", { prompt });
+
+export const interactClear = () => post("/api/interact/clear");
+
+export const getInteractFiles = () => get<FileEntry[]>("/api/interact/files");
+
+export const getInteractFile = (path: string) =>
+  get<FileContent>(`/api/interact/files/${path}`);
+
+export const getInteractFileDownloadUrl = (path: string) =>
+  `/api/interact/files/${path}/download`;

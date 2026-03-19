@@ -21,6 +21,8 @@ export $(grep -v '^#' "$PROJECT_ROOT/platform/.env" | xargs) 2>/dev/null || true
 
 # Ensure data directories exist
 mkdir -p "$PROJECT_ROOT/agent/data" "$PROJECT_ROOT/agent/output" /tmp/qed-workspace
+export INTERACT_WORKSPACE="/data/home/jadams2/wolfram-bridge/interact"
+mkdir -p "$INTERACT_WORKSPACE"
 
 # 1. VM Agent (port 8080)
 export VM_AGENT_TOKEN="dev-token-local"

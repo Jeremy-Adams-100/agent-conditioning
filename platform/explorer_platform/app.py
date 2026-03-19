@@ -15,6 +15,7 @@ from explorer_platform.idle import check_idle_vms
 from explorer_platform.onboard import router as onboard_router
 from explorer_platform.proxy import router as proxy_router
 from explorer_platform.email_verify import router as email_router
+from explorer_platform.interact import router as interact_router
 from explorer_platform.tiers import router as tier_router
 
 
@@ -61,6 +62,7 @@ app.include_router(explore_router)
 app.include_router(proxy_router)
 app.include_router(email_router)
 app.include_router(tier_router)
+app.include_router(interact_router)
 
 
 def run():
