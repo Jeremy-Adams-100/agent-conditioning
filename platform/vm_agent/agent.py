@@ -285,11 +285,38 @@ def interact_query(body: dict, _=Depends(_auth)):
 
     _save_interact_log(prompt, result_text)
 
-    return {"result": result_text, "usage": usage, "session_id": session_id}
+    # Context warning: flag when approaching the context window limit
+    total_ctx = (
+        usage.get("input_tokens", 0)
+        + usage.get("cache_read_input_tokens", 0)
+        + usage.get("cache_creation_input_tokens", 0)
+        + usage.get("output_tokens", 0)
+    )
+    # Context window depends on tier (200k free, 1M max); use model usage if available
+    model_usage = usage.get("modelUsage", {})
+    context_window = 200_000
+    for model_info in model_usage.values():
+        if isinstance(model_info, dict) and model_info.get("contextWindow"):
+            context_window = model_info["contextWindow"]
+            break
+    context_pct = total_ctx / context_window if context_window else 0
+    context_warning = None
+    if context_pct >= 0.80:
+        context_warning = (
+            f"Context is {context_pct:.0%} full ({total_ctx:,} / {context_window:,} tokens). "
+            "Click Clear to start a new session before context runs out."
+        )
+
+    return {
+        "result": result_text, "usage": usage, "session_id": session_id,
+        "context_warning": context_warning,
+    }
 
 
 @app.post("/interact/clear")
 def interact_clear(_=Depends(_auth)):
+    """Clear the interact session. Deletes session ID only — workspace files
+    (logs, scripts, reports) are preserved so users retain their work."""
     INTERACT_SESSION_FILE.unlink(missing_ok=True)
     return {"status": "cleared"}
 

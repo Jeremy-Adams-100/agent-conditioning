@@ -31,6 +31,7 @@ export default function InteractPage() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextWarning, setContextWarning] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "reports">("logs");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
   const [viewing, setViewing] = useState<ViewItem>(null);
@@ -106,6 +107,7 @@ export default function InteractPage() {
           { role: "assistant", content: res.result || "(empty response)" },
         ]);
       }
+      setContextWarning(res.context_warning ?? null);
       refreshFiles();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Query failed";
@@ -124,6 +126,7 @@ export default function InteractPage() {
     }
     setMessages([]);
     setError(null);
+    setContextWarning(null);
     setViewing(null);
     refreshFiles();
   }
@@ -264,11 +267,17 @@ export default function InteractPage() {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* Context warning banner */}
+              {contextWarning && (
+                <div className="px-4 py-2 bg-yellow-950 border-t border-yellow-800 text-xs text-yellow-300">
+                  {contextWarning}
+                </div>
+              )}
+
               {/* Error banner */}
               {error && (
                 <div className="px-4 py-2 bg-red-950 border-t border-red-800 text-xs text-red-300">
                   {error}
-                  {error.includes("context") && " Click Clear to start a new session."}
                 </div>
               )}
 
