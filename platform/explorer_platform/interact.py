@@ -32,7 +32,8 @@ async def interact_query(body: QueryRequest, user=Depends(get_current_user),
 
 
 @router.post("/clear")
-async def interact_clear(user=Depends(get_current_user)):
+async def interact_clear(user=Depends(get_current_user), conn=Depends(get_db)):
+    await _ensure_vm_running(user, conn)
     client = get_vm_client(user)
     try:
         return await client.interact_clear()
