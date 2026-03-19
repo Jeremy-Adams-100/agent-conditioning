@@ -209,7 +209,10 @@ def _build_interact_tools() -> list[str]:
     """
     return [
         "Read", "Write", "Edit", "Glob", "Grep",
-        f"Bash({WOLFRAM_PATH} *)", "Bash(pandoc *)", "WebSearch",
+        f"Bash({WOLFRAM_PATH} *)",
+        "Bash(wolframscript *)",
+        "Bash(pandoc *)",
+        "WebSearch",
     ]
 
 
@@ -221,11 +224,22 @@ def _build_interact_system_prompt() -> str:
         "  Contains scripts, libraries, and data from the autonomous exploration cycle.\n"
         f"- Your workspace: {INTERACT_WORKSPACE} (read/write)\n"
         "  Save all your files here — scripts, data, reports, figures.\n\n"
-        "TOOLS:\n"
-        f"- Wolfram Language: write .wls scripts to your workspace, run with {WOLFRAM_PATH}\n"
-        "- pandoc + tectonic for PDF reports:\n"
-        "    pandoc file.md -o file.pdf --pdf-engine=tectonic -V geometry:margin=1in\n"
-        "- WebSearch for looking things up\n\n"
+        "PERMISSIONS — read carefully:\n"
+        "- You can Read, Write, Edit, Glob, and Grep files freely in your workspace.\n"
+        "- You can Read files in the explorer workspace (read-only).\n"
+        "- Bash is RESTRICTED. You can ONLY run these commands:\n"
+        f"    {WOLFRAM_PATH} -script <file.wls>   (run Wolfram scripts)\n"
+        "    wolframscript -file <file.wls>        (alternative Wolfram invocation)\n"
+        "    pandoc <args>                          (generate PDF reports)\n"
+        "- You CANNOT run python, pip, node, curl, or any other shell commands.\n"
+        "- You CANNOT install packages or download files via Bash.\n"
+        "- All computation must be done in Wolfram Language (.wls scripts).\n\n"
+        "WORKFLOW:\n"
+        "1. Write a .wls script to your workspace using the Write tool.\n"
+        f"2. Run it: Bash({WOLFRAM_PATH} -script <your_script.wls>)\n"
+        "3. Read and interpret the output.\n\n"
+        "For PDF reports:\n"
+        "    pandoc file.md -o file.pdf --pdf-engine=tectonic -V geometry:margin=1in\n\n"
         "Be helpful and concise. Show your work. When running computations,\n"
         "explain what you're doing and what the results mean."
     )
