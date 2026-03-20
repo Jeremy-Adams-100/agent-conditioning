@@ -23,7 +23,10 @@ def _load_manifest() -> list[dict]:
     manifest_path = PACKAGES_DIR / "packages.json"
     if not manifest_path.exists():
         return []
-    return json.loads(manifest_path.read_text())
+    try:
+        return json.loads(manifest_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
 
 
 def _find_package(package_id: str) -> dict:

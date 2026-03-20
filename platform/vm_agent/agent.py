@@ -466,7 +466,10 @@ def share_install(body: dict, _=Depends(_auth)):
     WORKING_DIR.mkdir(parents=True, exist_ok=True)
     tmp_path = WORKING_DIR / f"_pkg_{uuid.uuid4().hex[:8]}.tar.gz"
     try:
-        urllib.request.urlretrieve(package_url, str(tmp_path))
+        # Download with 60s timeout (prevents hanging on unreachable URLs)
+        req = urllib.request.urlopen(package_url, timeout=60)
+        with open(tmp_path, "wb") as f:
+            f.write(req.read())
         # Extract with safety check
         with tarfile.open(str(tmp_path), "r:gz") as tf:
             for member in tf.getmembers():
