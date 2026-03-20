@@ -247,6 +247,7 @@ def _build_interact_tools() -> list[str]:
     return [
         "Read", "Write", "Edit", "Glob", "Grep",
         f"Bash({WOLFRAM_PATH} *)",
+        "Bash(wolfram *)",
         "Bash(wolframscript *)",
         "Bash(pandoc *)",
         "WebSearch",
