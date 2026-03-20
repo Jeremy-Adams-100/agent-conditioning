@@ -476,6 +476,13 @@ def share_install(body: dict, _=Depends(_auth)):
                 if member.name.startswith("/") or ".." in member.name:
                     raise HTTPException(400, "Package contains unsafe paths")
             tf.extractall(path=str(WORKING_DIR))
+        # Set timestamps to install time so files appear under today's date
+        now = datetime.now(timezone.utc).timestamp()
+        for p in target.rglob("*"):
+            try:
+                os.utime(p, (now, now))
+            except OSError:
+                pass
         return {"status": "installed", "topic_dir": topic_dir}
     except HTTPException:
         raise
