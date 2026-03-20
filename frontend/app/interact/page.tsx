@@ -210,7 +210,8 @@ export default function InteractPage() {
                 files={files}
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
-                extensions={[".md"]}
+                extensions={[".pdf", ".md"]}
+                pathPrefix="logs/"
                 emptyMessage="No logs yet"
               />
             )}
@@ -229,6 +230,7 @@ export default function InteractPage() {
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
                 extensions={[".png", ".pdf"]}
+                excludePathPrefix="logs/"
                 emptyMessage="No figures yet"
               />
             )}

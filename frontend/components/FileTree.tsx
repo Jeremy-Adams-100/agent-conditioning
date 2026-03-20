@@ -8,6 +8,8 @@ interface FileTreeProps {
   selectedPath: string | null;
   onSelect: (path: string) => void;
   extensions?: string[];
+  pathPrefix?: string;
+  excludePathPrefix?: string;
   emptyMessage?: string;
 }
 
@@ -28,13 +30,18 @@ function fileName(path: string): string {
 export default function FileTree({
   files, selectedPath, onSelect,
   extensions = [".wls", ".pdf"],
+  pathPrefix,
+  excludePathPrefix,
   emptyMessage = "No files yet",
 }: FileTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  const visibleFiles = files.filter(
-    (f) => extensions.some((ext) => f.path.endsWith(ext))
-  );
+  const visibleFiles = files.filter((f) => {
+    if (!extensions.some((ext) => f.path.endsWith(ext))) return false;
+    if (pathPrefix && !f.path.startsWith(pathPrefix)) return false;
+    if (excludePathPrefix && f.path.startsWith(excludePathPrefix)) return false;
+    return true;
+  });
 
   if (visibleFiles.length === 0) {
     return <p className="text-xs text-gray-500 p-2">{emptyMessage}</p>;

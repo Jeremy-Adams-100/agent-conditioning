@@ -189,11 +189,41 @@ def get_session(session_id: str, _=Depends(_auth)):
 # ---------------------------------------------------------------------------
 
 def _save_interact_log(prompt: str, response: str) -> None:
+    """Save Q&A log as both .md (raw) and .pdf (rendered with math)."""
     now = datetime.now(timezone.utc)
     log_dir = INTERACT_WORKSPACE / "logs" / now.strftime("%Y-%m-%d")
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{now.strftime('%H%M%S')}.md"
-    log_path.write_text(f"# Query\n\n{prompt}\n\n# Response\n\n{response}\n")
+    ts = now.strftime("%H%M%S")
+    md_path = log_dir / f"{ts}.md"
+    md_path.write_text(f"# Query\n\n{prompt}\n\n# Response\n\n{response}\n")
+    # Render PDF with equations via pandoc+tectonic (best-effort, non-blocking)
+    pdf_path = log_dir / f"{ts}.pdf"
+    try:
+        subprocess.run(
+            ["pandoc", str(md_path), "-o", str(pdf_path),
+             "--pdf-engine=tectonic", "-V", "geometry:margin=1in"],
+            capture_output=True, timeout=60,
+            cwd=str(log_dir),
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass  # pandoc not available or failed — .md still saved
+
+
+def _cleanup_old_interactions(max_age_days: int = 30) -> None:
+    """Delete interact workspace folders older than max_age_days."""
+    if not INTERACT_WORKSPACE.exists():
+        return
+    cutoff = datetime.now(timezone.utc).date() - __import__("datetime").timedelta(days=max_age_days)
+    for item in INTERACT_WORKSPACE.iterdir():
+        if not item.is_dir():
+            continue
+        try:
+            folder_date = datetime.strptime(item.name, "%Y-%m-%d").date()
+            if folder_date < cutoff:
+                import shutil
+                shutil.rmtree(item, ignore_errors=True)
+        except ValueError:
+            pass  # not a date-named folder
 
 
 def _build_interact_tools() -> list[str]:
@@ -229,7 +259,9 @@ def _build_interact_system_prompt() -> str:
         "- NO python, pip, node, curl, or other shell commands.\n"
         "- All computation in Wolfram Language (.wls scripts).\n\n"
         "WORKFLOW: Write .wls → run with "
-        f"Bash({WOLFRAM_PATH} -script <file.wls>) → interpret output.\n\n"
+        f"Bash({WOLFRAM_PATH} -script <file.wls>) → interpret output.\n"
+        "Save scripts and figures to today's date folder in your workspace\n"
+        "(e.g., YYYY-MM-DD/script.wls, YYYY-MM-DD/plot.png).\n\n"
         "FIGURES:\n"
         "- Export static PNGs only: Export[\"name.png\", plot, ImageResolution -> 150]\n"
         "- No interactive/dynamic graphics (Manipulate, Dynamic, etc.).\n"
@@ -269,6 +301,7 @@ def interact_query(body: dict, _=Depends(_auth)):
         raise HTTPException(400, "No prompt provided")
 
     INTERACT_WORKSPACE.mkdir(parents=True, exist_ok=True)
+    _cleanup_old_interactions()
 
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
