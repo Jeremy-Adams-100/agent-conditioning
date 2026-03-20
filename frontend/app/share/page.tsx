@@ -9,9 +9,14 @@ import {
   installSharePackage,
   resetSharePackage,
   getFiles,
+  getShareDocs,
+  getShareDoc,
+  getShareDocPdfUrl,
   type SharePackage,
 } from "@/lib/api";
 import NavTabs from "@/components/NavTabs";
+
+type DocFile = { path: string; size: number };
 
 export default function SharePage() {
   const router = useRouter();
@@ -21,6 +26,11 @@ export default function SharePage() {
   const [installed, setInstalled] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  // Docs viewer state
+  const [docsPackage, setDocsPackage] = useState<SharePackage | null>(null);
+  const [docFiles, setDocFiles] = useState<DocFile[]>([]);
+  const [viewingDoc, setViewingDoc] = useState<{ path: string; content: string; isPdf: boolean } | null>(null);
 
   // Auth + tier check
   useEffect(() => {
@@ -53,7 +63,6 @@ export default function SharePage() {
   function refreshInstalled() {
     getFiles()
       .then((files) => {
-        // A package is installed if its topic_dir appears as a directory prefix in the file list
         const dirs = new Set(files.map((f) => f.path.split("/")[0]));
         setInstalled(dirs);
       })
@@ -90,6 +99,37 @@ export default function SharePage() {
     }
   }
 
+  async function handleReadDocs(pkg: SharePackage) {
+    setDocsPackage(pkg);
+    setViewingDoc(null);
+    try {
+      const files = await getShareDocs(pkg.id);
+      setDocFiles(files);
+    } catch {
+      setDocFiles([]);
+    }
+  }
+
+  async function handleViewDoc(path: string) {
+    if (!docsPackage) return;
+    if (path.endsWith(".pdf")) {
+      setViewingDoc({ path, content: "", isPdf: true });
+    } else {
+      try {
+        const doc = await getShareDoc(docsPackage.id, path);
+        setViewingDoc({ path, content: doc.content, isPdf: false });
+      } catch {
+        setViewingDoc({ path, content: "(failed to load)", isPdf: false });
+      }
+    }
+  }
+
+  function closeDocs() {
+    setDocsPackage(null);
+    setDocFiles([]);
+    setViewingDoc(null);
+  }
+
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -98,9 +138,106 @@ export default function SharePage() {
     );
   }
 
+  // Docs viewer mode
+  if (docsPackage) {
+    const fileName = (p: string) => p.split("/").pop() ?? p;
+    const reports = docFiles.filter((f) => f.path.endsWith(".pdf") || f.path.endsWith(".md"));
+    const scripts = docFiles.filter((f) => f.path.endsWith(".wls"));
+
+    return (
+      <div className="h-screen flex flex-col">
+        <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-800 flex-shrink-0">
+          <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
+          <NavTabs current="share" />
+          <div className="flex-1" />
+          <button
+            onClick={closeDocs}
+            className="text-xs text-gray-400 border border-gray-700 rounded px-2 py-1 hover:text-gray-200 hover:border-gray-500 transition-colors"
+          >
+            Back to packages
+          </button>
+        </header>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* File sidebar */}
+          <aside className="w-64 border-r border-gray-800 flex flex-col overflow-hidden flex-shrink-0">
+            <div className="px-3 py-2 border-b border-gray-800">
+              <h2 className="text-xs font-medium text-gray-200">{docsPackage.name}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Read-only preview</p>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {reports.length > 0 && (
+                <div className="px-2 pt-2">
+                  <p className="text-xs font-medium text-gray-500 px-1 mb-1">Reports</p>
+                  {reports.map((f) => (
+                    <button
+                      key={f.path}
+                      onClick={() => handleViewDoc(f.path)}
+                      className={`w-full text-left px-2 py-1 text-xs rounded transition-colors ${
+                        viewingDoc?.path === f.path
+                          ? "bg-gray-800 text-gray-100"
+                          : "text-gray-400 hover:bg-gray-800/50"
+                      }`}
+                    >
+                      {fileName(f.path)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {scripts.length > 0 && (
+                <div className="px-2 pt-2">
+                  <p className="text-xs font-medium text-gray-500 px-1 mb-1">Scripts</p>
+                  {scripts.map((f) => (
+                    <button
+                      key={f.path}
+                      onClick={() => handleViewDoc(f.path)}
+                      className={`w-full text-left px-2 py-1 text-xs rounded transition-colors ${
+                        viewingDoc?.path === f.path
+                          ? "bg-gray-800 text-gray-100"
+                          : "text-gray-400 hover:bg-gray-800/50"
+                      }`}
+                    >
+                      {fileName(f.path)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Content viewer */}
+          <main className="flex-1 flex flex-col overflow-hidden">
+            {viewingDoc ? (
+              <>
+                <div className="px-4 py-2 border-b border-gray-800">
+                  <span className="text-xs text-gray-400">{viewingDoc.path}</span>
+                </div>
+                {viewingDoc.isPdf ? (
+                  <embed
+                    src={getShareDocPdfUrl(docsPackage.id, viewingDoc.path)}
+                    type="application/pdf"
+                    className="flex-1 w-full"
+                  />
+                ) : (
+                  <pre className="flex-1 overflow-auto p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap">
+                    {viewingDoc.content}
+                  </pre>
+                )}
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                Select a file to preview
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Package list mode
   return (
     <div className="h-screen flex flex-col">
-      {/* Top bar */}
       <header className="flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-3 border-b border-gray-800 flex-shrink-0">
         <span className="font-bold text-sm tracking-tight">Q.E.D.</span>
         <NavTabs current="share" />
@@ -112,7 +249,6 @@ export default function SharePage() {
         </div>
       </header>
 
-      {/* Message banner */}
       {message && (
         <div className={`px-4 py-2 text-xs flex-shrink-0 ${
           message.error
@@ -123,7 +259,6 @@ export default function SharePage() {
         </div>
       )}
 
-      {/* Main content */}
       <main className="flex-1 overflow-y-auto p-6 md:p-8">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-lg font-medium text-gray-100 mb-1">Shared Packages</h1>
@@ -160,6 +295,12 @@ export default function SharePage() {
                         <span>{pkg.size_mb} MB</span>
                         <span>{pkg.cycles} cycles</span>
                         <span>{pkg.created}</span>
+                        <button
+                          onClick={() => handleReadDocs(pkg)}
+                          className="text-gray-400 hover:text-gray-200 underline"
+                        >
+                          Read the docs
+                        </button>
                       </div>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">

@@ -122,3 +122,12 @@ export const installSharePackage = (package_id: string) =>
 
 export const resetSharePackage = (package_id: string) =>
   post<{ status: string; topic_dir: string }>("/api/share/reset", { package_id });
+
+export const getShareDocs = (package_id: string) =>
+  get<{ path: string; size: number }[]>(`/api/share/docs/${package_id}/files`);
+
+export const getShareDoc = (package_id: string, path: string) =>
+  get<FileContent>(`/api/share/docs/${package_id}/file/${path}`);
+
+export const getShareDocPdfUrl = (package_id: string, path: string) =>
+  `/api/share/docs/${package_id}/file/${path}`;

@@ -1,12 +1,14 @@
-"""Share endpoints: list packages, install, reset, download."""
+"""Share endpoints: list packages, install, reset, download, docs."""
 
+import io
 import json
 import os
+import tarfile
 from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from explorer_platform.deps import get_current_user, get_db
@@ -54,6 +56,48 @@ async def download_package(filename: str):
         raise HTTPException(404, "Package file not found")
     return FileResponse(filepath, filename=filename,
                         media_type="application/gzip")
+
+
+@router.get("/docs/{package_id}/files")
+async def list_package_docs(package_id: str):
+    """List viewable files (.wls, .pdf, .md) in a package. No auth required."""
+    pkg = _find_package(package_id)
+    tarpath = PACKAGES_DIR / pkg["file"]
+    if not tarpath.is_file():
+        raise HTTPException(404, "Package file not found")
+    viewable = (".wls", ".pdf", ".md")
+    files = []
+    with tarfile.open(str(tarpath), "r:gz") as tf:
+        for member in tf.getmembers():
+            if member.isfile() and any(member.name.endswith(ext) for ext in viewable):
+                files.append({"path": member.name, "size": member.size})
+    return files
+
+
+@router.get("/docs/{package_id}/file/{path:path}")
+async def get_package_doc(package_id: str, path: str):
+    """Read a single file from a package tarball. No auth, no download."""
+    pkg = _find_package(package_id)
+    tarpath = PACKAGES_DIR / pkg["file"]
+    if not tarpath.is_file():
+        raise HTTPException(404, "Package file not found")
+    # Validate path safety
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(400, "Invalid path")
+    with tarfile.open(str(tarpath), "r:gz") as tf:
+        try:
+            member = tf.getmember(path)
+        except KeyError:
+            raise HTTPException(404, "File not found in package")
+        f = tf.extractfile(member)
+        if f is None:
+            raise HTTPException(404, "Not a regular file")
+        data = f.read()
+    # Return text for .wls/.md, binary for .pdf
+    if path.endswith(".pdf"):
+        return Response(content=data, media_type="application/pdf",
+                        headers={"Content-Disposition": "inline"})
+    return {"path": path, "content": data.decode("utf-8", errors="replace")}
 
 
 @router.post("/install")
