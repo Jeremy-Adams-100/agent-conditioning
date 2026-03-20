@@ -9,6 +9,7 @@ interface FileTreeProps {
   onSelect: (path: string) => void;
   extensions?: string[];
   pathPrefix?: string;
+  pathContains?: string;
   excludePathPrefix?: string;
   emptyMessage?: string;
   collapsed?: Set<string>;
@@ -33,6 +34,7 @@ export default function FileTree({
   files, selectedPath, onSelect,
   extensions = [".wls", ".pdf"],
   pathPrefix,
+  pathContains,
   excludePathPrefix,
   emptyMessage = "No files yet",
   collapsed: controlledCollapsed,
@@ -45,6 +47,7 @@ export default function FileTree({
   const visibleFiles = files.filter((f) => {
     if (!extensions.some((ext) => f.path.endsWith(ext))) return false;
     if (pathPrefix && !f.path.startsWith(pathPrefix)) return false;
+    if (pathContains && !f.path.includes(pathContains)) return false;
     if (excludePathPrefix && f.path.startsWith(excludePathPrefix)) return false;
     return true;
   });

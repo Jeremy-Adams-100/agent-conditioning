@@ -226,7 +226,7 @@ export default function InteractPage() {
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
                 extensions={[".pdf", ".md"]}
-                pathPrefix="logs/"
+                pathContains="/logs/"
                 emptyMessage="No logs yet"
                 collapsed={logsCollapsed}
                 onToggleCollapsed={makeToggle(setLogsCollapsed)}
@@ -238,7 +238,8 @@ export default function InteractPage() {
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
                 extensions={[".wls"]}
-                emptyMessage="No .wls files yet"
+                pathContains="/scripts/"
+                emptyMessage="No scripts yet"
                 collapsed={filesCollapsed}
                 onToggleCollapsed={makeToggle(setFilesCollapsed)}
               />
@@ -249,7 +250,7 @@ export default function InteractPage() {
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
                 extensions={[".png", ".pdf"]}
-                excludePathPrefix="logs/"
+                pathContains="/figures/"
                 emptyMessage="No figures yet"
                 collapsed={figuresCollapsed}
                 onToggleCollapsed={makeToggle(setFiguresCollapsed)}

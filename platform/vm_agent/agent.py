@@ -188,14 +188,20 @@ def get_session(session_id: str, _=Depends(_auth)):
 # Interact agent — independent chat session
 # ---------------------------------------------------------------------------
 
+def _today_dir() -> Path:
+    """Return today's date directory, creating logs/scripts/figures subdirs."""
+    day = INTERACT_WORKSPACE / datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for sub in ("logs", "scripts", "figures"):
+        (day / sub).mkdir(parents=True, exist_ok=True)
+    return day
+
+
 def _save_interact_log(session_id: str, prompt: str, response: str) -> None:
     """Append Q&A to the session log file, then re-render PDF."""
     now = datetime.now(timezone.utc)
-    log_dir = INTERACT_WORKSPACE / "logs" / now.strftime("%Y-%m-%d")
-    log_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = _today_dir() / "logs"
     short_id = session_id[:8]
     md_path = log_dir / f"session_{short_id}.md"
-    # Append this Q&A to the session log
     entry = (
         f"## Q ({now.strftime('%H:%M:%S')})\n\n{prompt}\n\n"
         f"## A\n\n{response}\n\n---\n\n"
@@ -268,8 +274,12 @@ def _build_interact_system_prompt() -> str:
         "Web:      WebSearch for lookups.\n"
         "</tools>\n\n"
         "<workspace>\n"
-        f"Your workspace: {INTERACT_WORKSPACE} (read/write — save all files here)\n"
-        f"Explorer data:  {WORKING_DIR} (read-only reference)\n"
+        f"Your workspace: {INTERACT_WORKSPACE} (read/write)\n"
+        f"Explorer data:  {WORKING_DIR} (read-only reference)\n\n"
+        "File structure — use today's date folder:\n"
+        "  YYYY-MM-DD/scripts/  for .wls scripts\n"
+        "  YYYY-MM-DD/figures/  for .png figures\n"
+        "  YYYY-MM-DD/logs/     auto-managed (do not write here)\n"
         "</workspace>\n\n"
         "<figures>\n"
         "Static PNGs only: Export[\"name.png\", plot, ImageResolution -> 150]\n"
