@@ -188,16 +188,22 @@ def get_session(session_id: str, _=Depends(_auth)):
 # Interact agent — independent chat session
 # ---------------------------------------------------------------------------
 
-def _save_interact_log(prompt: str, response: str) -> None:
-    """Save Q&A log as both .md (raw) and .pdf (rendered with math)."""
+def _save_interact_log(session_id: str, prompt: str, response: str) -> None:
+    """Append Q&A to the session log file, then re-render PDF."""
     now = datetime.now(timezone.utc)
     log_dir = INTERACT_WORKSPACE / "logs" / now.strftime("%Y-%m-%d")
     log_dir.mkdir(parents=True, exist_ok=True)
-    ts = now.strftime("%H%M%S")
-    md_path = log_dir / f"{ts}.md"
-    md_path.write_text(f"# Query\n\n{prompt}\n\n# Response\n\n{response}\n")
-    # Render PDF with equations via pandoc+tectonic (best-effort, non-blocking)
-    pdf_path = log_dir / f"{ts}.pdf"
+    short_id = session_id[:8]
+    md_path = log_dir / f"session_{short_id}.md"
+    # Append this Q&A to the session log
+    entry = (
+        f"## Q ({now.strftime('%H:%M:%S')})\n\n{prompt}\n\n"
+        f"## A\n\n{response}\n\n---\n\n"
+    )
+    with open(md_path, "a") as f:
+        f.write(entry)
+    # Re-render full log as PDF (best-effort)
+    pdf_path = log_dir / f"session_{short_id}.pdf"
     try:
         subprocess.run(
             ["pandoc", str(md_path), "-o", str(pdf_path),
@@ -206,7 +212,7 @@ def _save_interact_log(prompt: str, response: str) -> None:
             cwd=str(log_dir),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass  # pandoc not available or failed — .md still saved
+        pass
 
 
 def _cleanup_old_interactions(max_age_days: int = 30) -> None:
@@ -350,7 +356,7 @@ def interact_query(body: dict, _=Depends(_auth)):
     result_text = envelope.get("result", "")
     usage = envelope.get("usage", {})
 
-    _save_interact_log(prompt, result_text)
+    _save_interact_log(session_id, prompt, result_text)
 
     # Context warning: flag when approaching the context window limit
     total_ctx = (
