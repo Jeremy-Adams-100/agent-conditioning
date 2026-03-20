@@ -406,6 +406,8 @@ def _compact_agent_session(
             framework=agent_def.get("framework"),
             token_estimate=len(summary) // 4,
             record_type="compaction",
+            topic="compact — context summary",
+            keywords=agent_name,
         )
         last_session_id = session_id
         db_ok = True
@@ -453,13 +455,16 @@ def _error_result(agent_name: str, agent_def: dict, error: str) -> dict:
 def _extract_topic(output_text: str) -> str | None:
     """Extract topic from agent output. Deterministic — no agent involvement.
 
-    Looks for '## Current Sub-Topic' (researcher output format) and
-    extracts the first line after it, stripping markdown bold markers.
+    Tries multiple patterns in priority order to handle format variations:
+    1. '## Current Sub-Topic' header (original researcher format)
+    2. '**Sub-Topic**' in a markdown table (newer researcher format)
+    3. First '# ...' or '## ...' heading that looks like a topic
     """
     if not output_text:
         return None
     import re
-    # Match "## Current Sub-Topic" followed by the topic line
+
+    # Pattern 1: ## Current Sub-Topic header
     match = re.search(
         r"##\s*Current Sub-?Topic\s*\n+\*{0,2}([^\n*]+)\*{0,2}",
         output_text, re.IGNORECASE
@@ -467,7 +472,29 @@ def _extract_topic(output_text: str) -> str | None:
     if match:
         topic = match.group(1).strip()
         if topic:
-            return topic[:100]  # cap length
+            return topic[:100]
+
+    # Pattern 2: **Sub-Topic** | value in a table row
+    match = re.search(
+        r"\*{2}Sub-?Topic\*{2}\s*\|\s*(?:ST\d+\s*[—–-]\s*)?(.+)",
+        output_text, re.IGNORECASE
+    )
+    if match:
+        topic = match.group(1).strip().rstrip("|").strip()
+        if topic:
+            return topic[:100]
+
+    # Pattern 3: First heading that isn't a generic label
+    skip = {"query", "response", "checkpoint", "output", "validation",
+            "decision", "rationale", "guidance", "research brief"}
+    for match in re.finditer(r"^#{1,2}\s+(.+)$", output_text, re.MULTILINE):
+        heading = match.group(1).strip().strip("*").strip()
+        # Skip generic headings and output markers
+        if heading.lower() in skip or heading.startswith("["):
+            continue
+        if len(heading) > 10:  # skip very short headings
+            return heading[:100]
+
     return None
 
 
