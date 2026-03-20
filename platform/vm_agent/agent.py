@@ -200,7 +200,7 @@ def _today_dir() -> Path:
 
 
 def _save_interact_log(session_id: str, prompt: str, response: str) -> None:
-    """Append Q&A to the session log file, then re-render PDF."""
+    """Append Q&A to the session log (.md only, no PDF rendering)."""
     now = datetime.now(timezone.utc)
     log_dir = _today_dir() / "logs"
     short_id = session_id[:8]
@@ -211,17 +211,6 @@ def _save_interact_log(session_id: str, prompt: str, response: str) -> None:
     )
     with open(md_path, "a") as f:
         f.write(entry)
-    # Re-render full log as PDF (best-effort)
-    pdf_path = log_dir / f"session_{short_id}.pdf"
-    try:
-        subprocess.run(
-            ["pandoc", str(md_path), "-o", str(pdf_path),
-             "--pdf-engine=tectonic", "-V", "geometry:margin=1in"],
-            capture_output=True, timeout=60,
-            cwd=str(log_dir),
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
 
 
 def _cleanup_old_interactions(max_age_days: int = 30) -> None:

@@ -225,7 +225,7 @@ export default function InteractPage() {
                 files={files}
                 selectedPath={viewing?.path ?? null}
                 onSelect={handleSelectFile}
-                extensions={[".pdf", ".md"]}
+                extensions={[".md"]}
                 pathContains="/logs/"
                 emptyMessage="No logs yet"
                 collapsed={logsCollapsed}
