@@ -141,7 +141,7 @@ export default function SharePage() {
   // Docs viewer mode
   if (docsPackage) {
     const fileName = (p: string) => p.split("/").pop() ?? p;
-    const reports = docFiles.filter((f) => f.path.endsWith(".pdf") || f.path.endsWith(".md"));
+    const reports = docFiles.filter((f) => f.path.endsWith(".pdf"));
     const scripts = docFiles.filter((f) => f.path.endsWith(".wls"));
 
     return (
