@@ -200,7 +200,7 @@ export default function InteractPage() {
                     : "text-gray-400 hover:text-gray-300"
                 }`}
               >
-                {tab === "logs" ? "Logs" : tab === "files" ? "Files" : "Figures"}
+                {tab === "logs" ? "Logs" : tab === "files" ? "Scripts" : "Figures"}
               </button>
             ))}
           </div>
@@ -304,7 +304,7 @@ export default function InteractPage() {
               mobilePanel === "sidebar" && sidebarTab === tab ? "text-gray-100" : "text-gray-400"
             }`}
           >
-            {tab === "logs" ? "Logs" : tab === "files" ? "Files" : "Figures"}
+            {tab === "logs" ? "Logs" : tab === "files" ? "Scripts" : "Figures"}
           </button>
         ))}
       </nav>

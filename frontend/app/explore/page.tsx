@@ -159,7 +159,7 @@ export default function ExplorePage() {
                   : "text-gray-400 hover:text-gray-300"
               }`}
             >
-              Files
+              Scripts
             </button>
             <button
               onClick={() => {
@@ -264,7 +264,7 @@ export default function ExplorePage() {
             mobilePanel === "sidebar" && sidebarTab === "files" ? "text-gray-100" : "text-gray-400"
           }`}
         >
-          Files
+          Scripts
         </button>
         <button
           onClick={() => { setMobilePanel("sidebar"); setSidebarTab("reports"); refreshFiles(); }}
