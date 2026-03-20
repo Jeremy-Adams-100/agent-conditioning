@@ -406,8 +406,8 @@ def _compact_agent_session(
             framework=agent_def.get("framework"),
             token_estimate=len(summary) // 4,
             record_type="compaction",
-            topic="compact — context summary",
-            keywords=agent_name,
+            topic="Context Summary",
+            keywords="compact",
         )
         last_session_id = session_id
         db_ok = True
@@ -695,7 +695,7 @@ def _run_reporter(
         last_session_id = _store_agent_output(
             conn, "reporter", reporter_def, output_text,
             cycle, last_session_id,
-            current_topic="exploration_report",
+            current_topic="Exploration Report",
         )
 
         # Auto-compact check
