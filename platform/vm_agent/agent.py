@@ -10,8 +10,11 @@ Usage:
 
 import json
 import os
+import shutil
 import subprocess
+import tarfile
 import uuid
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -440,3 +443,56 @@ def interact_get_file(path: str, _=Depends(_auth)):
         return {"path": path, "content": full.read_text(errors="replace")}
     except OSError:
         raise HTTPException(500, "Could not read file")
+
+
+# ---------------------------------------------------------------------------
+# Share — package install/reset
+# ---------------------------------------------------------------------------
+
+@app.post("/share/install")
+def share_install(body: dict, _=Depends(_auth)):
+    """Download and extract a package into the explorer workspace."""
+    package_url = body.get("package_url", "")
+    topic_dir = body.get("topic_dir", "")
+    if not package_url or not topic_dir:
+        raise HTTPException(400, "Missing package_url or topic_dir")
+    # Validate topic_dir is a simple name
+    if "/" in topic_dir or ".." in topic_dir:
+        raise HTTPException(400, "Invalid topic_dir")
+    target = WORKING_DIR / topic_dir
+    if target.exists():
+        raise HTTPException(409, "Already installed")
+    # Download tarball to temp file
+    WORKING_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = WORKING_DIR / f"_pkg_{uuid.uuid4().hex[:8]}.tar.gz"
+    try:
+        urllib.request.urlretrieve(package_url, str(tmp_path))
+        # Extract with safety check
+        with tarfile.open(str(tmp_path), "r:gz") as tf:
+            for member in tf.getmembers():
+                if member.name.startswith("/") or ".." in member.name:
+                    raise HTTPException(400, "Package contains unsafe paths")
+            tf.extractall(path=str(WORKING_DIR))
+        return {"status": "installed", "topic_dir": topic_dir}
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up partial extraction
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        raise HTTPException(500, f"Install failed: {e}")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+@app.post("/share/reset")
+def share_reset(body: dict, _=Depends(_auth)):
+    """Remove an installed package from the explorer workspace."""
+    topic_dir = body.get("topic_dir", "")
+    if not topic_dir or "/" in topic_dir or ".." in topic_dir:
+        raise HTTPException(400, "Invalid topic_dir")
+    target = WORKING_DIR / topic_dir
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(404, "Not installed")
+    shutil.rmtree(target)
+    return {"status": "removed", "topic_dir": topic_dir}

@@ -3,13 +3,14 @@
 import Link from "next/link";
 
 interface NavTabsProps {
-  current: "explore" | "interact";
+  current: "explore" | "interact" | "share";
 }
 
 export default function NavTabs({ current }: NavTabsProps) {
   const tabs = [
     { key: "explore", label: "Explore", href: "/explore" },
     { key: "interact", label: "Interact", href: "/interact" },
+    { key: "share", label: "Share", href: "/share" },
   ] as const;
 
   return (

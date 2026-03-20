@@ -1,0 +1,12 @@
+[
+  {
+    "id": "quantum-foundations",
+    "name": "Quantum Mechanics Foundations",
+    "description": "10 libraries (postulates, angular momentum, entanglement, path integrals, open systems, hydrogen/helium, quantum information), 9 exploration scripts, 10 test suites (211 assertions), 5 reports covering 11 cycles.",
+    "file": "quantum-foundations.tar.gz",
+    "topic_dir": "quantum_foundations",
+    "size_mb": 0.5,
+    "cycles": 11,
+    "created": "2026-03-20"
+  }
+]

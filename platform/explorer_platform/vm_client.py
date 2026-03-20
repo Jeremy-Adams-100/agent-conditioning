@@ -98,6 +98,22 @@ class VMClient:
         r.raise_for_status()
         return r
 
+    # --- Share packages ---
+
+    async def share_install(self, package_url: str, topic_dir: str) -> dict:
+        r = await self._client.post(
+            "/share/install",
+            json={"package_url": package_url, "topic_dir": topic_dir},
+            timeout=120.0,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def share_reset(self, topic_dir: str) -> dict:
+        r = await self._client.post("/share/reset", json={"topic_dir": topic_dir})
+        r.raise_for_status()
+        return r.json()
+
     async def close(self):
         await self._client.aclose()
 

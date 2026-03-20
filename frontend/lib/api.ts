@@ -102,3 +102,23 @@ export const getInteractFile = (path: string) =>
 
 export const getInteractFileDownloadUrl = (path: string) =>
   `/api/interact/files/${path}/download`;
+
+// Share
+export interface SharePackage {
+  id: string;
+  name: string;
+  description: string;
+  file: string;
+  topic_dir: string;
+  size_mb: number;
+  cycles: number;
+  created: string;
+}
+
+export const getSharePackages = () => get<SharePackage[]>("/api/share/packages");
+
+export const installSharePackage = (package_id: string) =>
+  post<{ status: string; topic_dir: string }>("/api/share/install", { package_id });
+
+export const resetSharePackage = (package_id: string) =>
+  post<{ status: string; topic_dir: string }>("/api/share/reset", { package_id });

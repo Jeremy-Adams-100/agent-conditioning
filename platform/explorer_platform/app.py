@@ -16,6 +16,7 @@ from explorer_platform.onboard import router as onboard_router
 from explorer_platform.proxy import router as proxy_router
 from explorer_platform.email_verify import router as email_router
 from explorer_platform.interact import router as interact_router
+from explorer_platform.share import router as share_router
 from explorer_platform.tiers import router as tier_router
 
 
@@ -63,6 +64,7 @@ app.include_router(proxy_router)
 app.include_router(email_router)
 app.include_router(tier_router)
 app.include_router(interact_router)
+app.include_router(share_router)
 
 
 def run():
