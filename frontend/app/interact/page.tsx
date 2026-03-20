@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   getOnboardStatus,
@@ -28,6 +28,9 @@ export default function InteractPage() {
   const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "figures">("logs");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
   const [viewing, setViewing] = useState<ViewItem>(null);
+  const [logsCollapsed, setLogsCollapsed] = useState<Set<string>>(new Set());
+  const [filesCollapsed, setFilesCollapsed] = useState<Set<string>>(new Set());
+  const [figuresCollapsed, setFiguresCollapsed] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -89,6 +92,18 @@ export default function InteractPage() {
       el.style.overflowY = "auto";
     }
   }, [prompt]);
+
+  const makeToggle = useCallback(
+    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (date: string) => {
+      setter((prev) => {
+        const next = new Set(prev);
+        if (next.has(date)) next.delete(date);
+        else next.add(date);
+        return next;
+      });
+    },
+    []
+  );
 
   function handleQuery() {
     if (!prompt.trim() || loading) return;
@@ -213,6 +228,8 @@ export default function InteractPage() {
                 extensions={[".pdf", ".md"]}
                 pathPrefix="logs/"
                 emptyMessage="No logs yet"
+                collapsed={logsCollapsed}
+                onToggleCollapsed={makeToggle(setLogsCollapsed)}
               />
             )}
             {sidebarTab === "files" && (
@@ -222,6 +239,8 @@ export default function InteractPage() {
                 onSelect={handleSelectFile}
                 extensions={[".wls"]}
                 emptyMessage="No .wls files yet"
+                collapsed={filesCollapsed}
+                onToggleCollapsed={makeToggle(setFilesCollapsed)}
               />
             )}
             {sidebarTab === "figures" && (
@@ -232,6 +251,8 @@ export default function InteractPage() {
                 extensions={[".png", ".pdf"]}
                 excludePathPrefix="logs/"
                 emptyMessage="No figures yet"
+                collapsed={figuresCollapsed}
+                onToggleCollapsed={makeToggle(setFiguresCollapsed)}
               />
             )}
           </div>

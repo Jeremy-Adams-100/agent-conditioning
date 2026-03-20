@@ -11,6 +11,8 @@ interface FileTreeProps {
   pathPrefix?: string;
   excludePathPrefix?: string;
   emptyMessage?: string;
+  collapsed?: Set<string>;
+  onToggleCollapsed?: (date: string) => void;
 }
 
 function formatSize(bytes: number): string {
@@ -33,8 +35,12 @@ export default function FileTree({
   pathPrefix,
   excludePathPrefix,
   emptyMessage = "No files yet",
+  collapsed: controlledCollapsed,
+  onToggleCollapsed,
 }: FileTreeProps) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Use controlled state if provided, otherwise local state
+  const [localCollapsed, setLocalCollapsed] = useState<Set<string>>(new Set());
+  const collapsed = controlledCollapsed ?? localCollapsed;
 
   const visibleFiles = files.filter((f) => {
     if (!extensions.some((ext) => f.path.endsWith(ext))) return false;
@@ -57,12 +63,16 @@ export default function FileTree({
   const dates = [...byDate.keys()].sort().reverse();
 
   function toggleDate(date: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(date)) next.delete(date);
-      else next.add(date);
-      return next;
-    });
+    if (onToggleCollapsed) {
+      onToggleCollapsed(date);
+    } else {
+      setLocalCollapsed((prev) => {
+        const next = new Set(prev);
+        if (next.has(date)) next.delete(date);
+        else next.add(date);
+        return next;
+      });
+    }
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getOnboardStatus, getSession, getFile, getFileDownloadUrl, checkTier } from "@/lib/api";
 import { useExplorationStatus, useSessions, useFiles } from "@/lib/hooks";
@@ -24,6 +24,9 @@ export default function ExplorePage() {
   const [viewing, setViewing] = useState<ViewItem>(null);
   const [sidebarTab, setSidebarTab] = useState<"logs" | "files" | "reports">("logs");
   const [mobilePanel, setMobilePanel] = useState<"content" | "sidebar">("content");
+  const [logsCollapsed, setLogsCollapsed] = useState<Set<string>>(new Set());
+  const [filesCollapsed, setFilesCollapsed] = useState<Set<string>>(new Set());
+  const [reportsCollapsed, setReportsCollapsed] = useState<Set<string>>(new Set());
 
   // Check auth + onboarding, detect tier if unknown
   useEffect(() => {
@@ -86,6 +89,18 @@ export default function ExplorePage() {
       setViewing({ type: "file", path, title: path, content: "(failed to load)" });
     }
   }
+
+  const makeToggle = useCallback(
+    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (date: string) => {
+      setter((prev) => {
+        const next = new Set(prev);
+        if (next.has(date)) next.delete(date);
+        else next.add(date);
+        return next;
+      });
+    },
+    []
+  );
 
   function handleAction() {
     refreshStatus();
@@ -190,6 +205,8 @@ export default function ExplorePage() {
                 onSelect={handleSelectFile}
                 extensions={[".wls"]}
                 emptyMessage="No .wls files yet"
+                collapsed={filesCollapsed}
+                onToggleCollapsed={makeToggle(setFilesCollapsed)}
               />
             )}
             {sidebarTab === "reports" && (
@@ -199,6 +216,8 @@ export default function ExplorePage() {
                 onSelect={handleSelectFile}
                 extensions={[".pdf"]}
                 emptyMessage="No reports yet"
+                collapsed={reportsCollapsed}
+                onToggleCollapsed={makeToggle(setReportsCollapsed)}
               />
             )}
           </div>
