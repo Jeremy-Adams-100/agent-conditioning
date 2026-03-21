@@ -349,7 +349,18 @@ def interact_query(body: dict, _=Depends(_auth)):
         timeout=3600, cwd=str(INTERACT_WORKSPACE), env=env,
     )
 
-    # Session: resume existing or create new
+    # Session: resume existing or create new.
+    # If the system prompt has changed (code update), start fresh so the
+    # new prompt takes effect instead of resuming with stale conditioning.
+    import hashlib
+    prompt_hash = hashlib.md5(_build_interact_system_prompt().encode()).hexdigest()[:12]
+    prompt_hash_file = DATA_DIR / "interact_prompt_hash"
+    stored_hash = prompt_hash_file.read_text().strip() if prompt_hash_file.exists() else ""
+    if stored_hash != prompt_hash:
+        INTERACT_SESSION_FILE.unlink(missing_ok=True)
+        prompt_hash_file.parent.mkdir(parents=True, exist_ok=True)
+        prompt_hash_file.write_text(prompt_hash)
+
     is_resume = INTERACT_SESSION_FILE.exists()
     if is_resume:
         session_id = INTERACT_SESSION_FILE.read_text().strip()
