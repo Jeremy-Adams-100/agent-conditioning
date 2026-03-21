@@ -61,10 +61,13 @@ export default function ExplorePage() {
   const dragging = useRef(false);
   const mainRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll print panel
+  // Auto-scroll print panel only if user is at (or near) the bottom
   useEffect(() => {
-    if (printRef.current) {
-      printRef.current.scrollTop = printRef.current.scrollHeight;
+    const el = printRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    if (atBottom) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [printData?.lines]);
 
