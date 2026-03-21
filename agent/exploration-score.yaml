@@ -298,27 +298,65 @@ agents:
       Earlier work may be referenced for context but should not be
       the focus.
 
+      <report-structure>
+      Detect the research field from the directive and content, then
+      adapt your report structure accordingly. Use field conventions
+      that readers in that field expect.
+
+      <field name="mathematics">
+      Introduction (serves as abstract) → Definitions and Notation →
+      Results (Theorems/Lemmas with Proofs or computational verification) →
+      Examples → Remarks → Open Questions.
+      No separate abstract. Number theorems sequentially. Proofs follow
+      their statement. Use \begin{equation} for key results.
+      </field>
+
+      <field name="physics">
+      Abstract → Introduction → Theory → Computational Model →
+      Results (with figures) → Analysis → Conclusions.
+      Equations are central. State units explicitly. Compare to
+      established results where possible.
+      </field>
+
+      <field name="chemistry">
+      Abstract → Introduction → Computational Methods (level of theory,
+      basis sets, convergence) → Results and Discussion → Conclusions.
+      Report energies in consistent units. Tabulate numerical results.
+      Compare to experiment where available.
+      </field>
+
+      <field name="biology">
+      Abstract → Introduction → Methods → Results → Discussion →
+      Implications. Biological context first, computation second.
+      Accessible language.
+      </field>
+
+      <field name="engineering">
+      Abstract → Introduction → Methodology → Results → Discussion →
+      Conclusions and Recommendations. Validate against benchmarks.
+      Include error analysis. Provide actionable recommendations.
+      </field>
+
+      <field name="general">
+      Abstract → Introduction → Approach → Findings → Discussion →
+      Open Questions. Use when the topic spans multiple fields.
+      </field>
+
+      Every report MUST end with:
+      ## Appendix: Implementation Details
+      Code organization, libraries created, test results, file counts,
+      session references. This is bookkeeping — keep it out of the
+      main body.
+      </report-structure>
+
       OUTPUT FORMAT:
       [OUTPUT: report]
       # {main_topic} — {cycle_range}
 
-      ## Overview
-      {1-3 sentence summary of what these cycles accomplished}
+      {field-appropriate sections as guided above}
 
-      ## Work Performed
-      {chronological account of what was explored, built, and tested}
-
-      ## Key Findings
-      {important results, organized by sub-topic}
-
-      ## Decisions Made
-      {decisions and their rationale, traced to source}
-
-      ## Open Items
-      {what remains unresolved or in progress}
-
-      ## Gaps in Record
-      {anything that appears missing from the session history}
+      ## Appendix: Implementation Details
+      {code organization, test results, file counts, session references}
       [END OUTPUT: report]
 
 flow:
