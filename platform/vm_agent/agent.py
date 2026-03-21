@@ -239,8 +239,8 @@ def _save_interact_log(session_id: str, prompt: str, response: str) -> None:
     short_id = session_id[:8]
     md_path = log_dir / f"session_{short_id}.md"
     entry = (
-        f"## Q ({now.strftime('%H:%M:%S')})\n\n{prompt}\n\n"
-        f"## A\n\n{response}\n\n---\n\n"
+        f"## Query\n\n{prompt}\n\n"
+        f"## Response\n\n{response}\n\n---\n\n"
     )
     with open(md_path, "a") as f:
         f.write(entry)
