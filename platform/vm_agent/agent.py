@@ -62,8 +62,9 @@ def start(body: dict, _=Depends(_auth)):
             _log_file.close()
         except OSError:
             pass
-    # Redirect exploration stdout/stderr to log file for the Print panel
-    _log_file = open(DATA_DIR / "exploration.log", "w")
+    # Redirect exploration stdout/stderr to log file for the Print panel.
+    # Line-buffered (buffering=1) so each print() reaches disk immediately.
+    _log_file = open(DATA_DIR / "exploration.log", "w", buffering=1)
     # Run from parent of DATA_DIR (project root on VM, or agent-conditioning locally)
     cwd = os.environ.get("PROJECT_ROOT", str(DATA_DIR.parent))
     _proc = subprocess.Popen(cmd, cwd=cwd, stdout=_log_file, stderr=_log_file)
@@ -131,15 +132,23 @@ def status(_=Depends(_auth)):
 @app.get("/print")
 def get_print(lines: int = 50, _=Depends(_auth)):
     """Return the last N lines of the exploration log for the Print panel."""
+    global _log_file
+    running = _proc is not None and _proc.poll() is None
+    # Close log file handle once process exits (free the resource)
+    if not running and _log_file:
+        try:
+            _log_file.close()
+        except OSError:
+            pass
+        _log_file = None
     log_path = DATA_DIR / "exploration.log"
     if not log_path.exists():
-        return {"lines": [], "running": False}
+        return {"lines": [], "running": running}
     try:
         text = log_path.read_text(errors="replace")
     except OSError:
-        return {"lines": [], "running": False}
+        return {"lines": [], "running": running}
     tail = text.split("\n")[-lines:]
-    running = _proc is not None and _proc.poll() is None
     return {"lines": tail, "running": running}
 
 
