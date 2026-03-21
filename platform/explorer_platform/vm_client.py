@@ -41,6 +41,11 @@ class VMClient:
         r.raise_for_status()
         return r.json()
 
+    async def get_print_output(self, lines: int = 50) -> dict:
+        r = await self._client.get("/print", params={"lines": lines})
+        r.raise_for_status()
+        return r.json()
+
     async def list_files(self) -> list:
         r = await self._client.get("/files")
         r.raise_for_status()

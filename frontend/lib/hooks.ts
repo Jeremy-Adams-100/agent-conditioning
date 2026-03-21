@@ -35,6 +35,15 @@ export function useFiles() {
   });
 }
 
+// Poll exploration print output every 3 seconds
+export function usePrintOutput(enabled = true) {
+  return useSWR<{ lines: string[]; running: boolean }>(
+    enabled ? "/api/data/print" : null,
+    fetcher,
+    { refreshInterval: enabled ? 3000 : 0, revalidateOnFocus: false }
+  );
+}
+
 // Interact files (on demand, not polling)
 export function useInteractFiles() {
   return useSWR<FileEntry[]>("/api/interact/files", fetcher, {

@@ -34,6 +34,7 @@ INTERACT_SESSION_FILE = DATA_DIR / "interact_session_id"
 INTERACT_MODEL = os.environ.get("INTERACT_MODEL", "sonnet")
 
 _proc: subprocess.Popen | None = None
+_log_file = None  # open file handle for exploration stdout/stderr
 
 
 def _auth(authorization: str = Header(default="")):
@@ -43,7 +44,7 @@ def _auth(authorization: str = Header(default="")):
 
 @app.post("/start")
 def start(body: dict, _=Depends(_auth)):
-    global _proc
+    global _proc, _log_file
     topic = body.get("topic", "").strip()
     cmd = EXPLORATION_CMD.split() + ["start"]
     if topic:
@@ -55,9 +56,17 @@ def start(body: dict, _=Depends(_auth)):
         sig_path = DATA_DIR / sig
         if sig_path.exists():
             sig_path.unlink(missing_ok=True)
+    # Close previous log file if any
+    if _log_file:
+        try:
+            _log_file.close()
+        except OSError:
+            pass
+    # Redirect exploration stdout/stderr to log file for the Print panel
+    _log_file = open(DATA_DIR / "exploration.log", "w")
     # Run from parent of DATA_DIR (project root on VM, or agent-conditioning locally)
     cwd = os.environ.get("PROJECT_ROOT", str(DATA_DIR.parent))
-    _proc = subprocess.Popen(cmd, cwd=cwd)
+    _proc = subprocess.Popen(cmd, cwd=cwd, stdout=_log_file, stderr=_log_file)
     return {"status": "starting", "pid": _proc.pid}
 
 
@@ -117,6 +126,21 @@ def status(_=Depends(_auth)):
             pass
 
     return result
+
+
+@app.get("/print")
+def get_print(lines: int = 50, _=Depends(_auth)):
+    """Return the last N lines of the exploration log for the Print panel."""
+    log_path = DATA_DIR / "exploration.log"
+    if not log_path.exists():
+        return {"lines": [], "running": False}
+    try:
+        text = log_path.read_text(errors="replace")
+    except OSError:
+        return {"lines": [], "running": False}
+    tail = text.split("\n")[-lines:]
+    running = _proc is not None and _proc.poll() is None
+    return {"lines": tail, "running": running}
 
 
 @app.get("/files")

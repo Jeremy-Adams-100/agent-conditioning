@@ -29,6 +29,16 @@ async def proxy_status(user=Depends(get_current_user)):
         return _DEFAULT_STATUS
 
 
+@router.get("/print")
+async def proxy_print(user=Depends(get_current_user)):
+    try:
+        client = get_vm_client(user)
+        return await client.get_print_output()
+    except (HTTPException, httpx.ConnectError, httpx.ConnectTimeout,
+            httpx.TimeoutException, httpx.HTTPStatusError):
+        return {"lines": [], "running": False}
+
+
 @router.get("/sessions")
 async def proxy_sessions(query: str = None, limit: int = 20,
                          user=Depends(get_current_user)):

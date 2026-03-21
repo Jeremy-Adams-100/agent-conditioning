@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getOnboardStatus, getSession, getFile, getFileDownloadUrl, checkTier } from "@/lib/api";
-import { useExplorationStatus, useSessions, useFiles } from "@/lib/hooks";
+import { useExplorationStatus, useSessions, useFiles, usePrintOutput } from "@/lib/hooks";
 import StatusBar from "@/components/StatusBar";
 import Controls from "@/components/Controls";
 import SessionList from "@/components/SessionList";
@@ -50,9 +50,41 @@ export default function ExplorePage() {
   const { data: status, mutate: refreshStatus } = useExplorationStatus(ready);
   const { data: sessions = [], mutate: refreshSessions } = useSessions();
   const { data: files = [], mutate: refreshFiles } = useFiles();
+  const { data: printData } = usePrintOutput(ready);
 
   const isRunning = status?.exploration_running ?? false;
   const hasCycles = (status?.state?.cycle ?? 0) > 0;
+
+  // Print panel state
+  const [printHeight, setPrintHeight] = useState(33); // percentage
+  const printRef = useRef<HTMLPreElement>(null);
+  const dragging = useRef(false);
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll print panel
+  useEffect(() => {
+    if (printRef.current) {
+      printRef.current.scrollTop = printRef.current.scrollHeight;
+    }
+  }, [printData?.lines]);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current || !mainRef.current) return;
+      const rect = mainRef.current.getBoundingClientRect();
+      const pct = ((rect.bottom - ev.clientY) / rect.height) * 100;
+      setPrintHeight(Math.max(10, Math.min(80, pct)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
   const currentCycle = status?.state?.cycle ?? 0;
 
   async function handleSelectSession(session: SessionEntry) {
@@ -223,40 +255,69 @@ export default function ExplorePage() {
           </div>
         </aside>
 
-        {/* Content — hidden on mobile when sidebar is shown */}
-        <main className={`${mobilePanel === "content" ? "flex" : "hidden"} md:flex flex-1 flex-col overflow-hidden`}>
-          {viewing ? (
-            <ContentViewer
-              title={viewing.title}
-              content={viewing.content}
-              type={viewing.type}
-              downloadUrl={viewing.type === "file" ? viewing.downloadUrl : undefined}
-              renderMarkdown
-            />
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
-              {isRunning ? (
-                <>
-                  <div className="inline-block w-5 h-5 border-2 border-gray-700 border-t-gray-300 rounded-full animate-spin" />
-                  <p className="text-gray-300 font-medium">Exploring...</p>
-                  {(status?.state?.cycle ?? 0) > 0 ? (
-                    <p className="text-xs text-gray-500">
-                      Cycle {status?.state?.cycle} in progress — select a session to view previous results
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500 text-center max-w-xs">
-                      Your research agents are working. First results appear in ~5-10 minutes.
-                      This page updates automatically.
-                    </p>
-                  )}
-                </>
-              ) : hasCycles ? (
-                "Select a log, file, or report to view"
-              ) : (
-                "Type a topic and click Go to start exploring"
+        {/* Content + Print split — hidden on mobile when sidebar is shown */}
+        <main ref={mainRef} className={`${mobilePanel === "content" ? "flex" : "hidden"} md:flex flex-1 flex-col overflow-hidden`}>
+          {/* Content viewer (top) */}
+          <div className="overflow-hidden" style={{ flex: `0 0 ${100 - printHeight}%` }}>
+            {viewing ? (
+              <ContentViewer
+                title={viewing.title}
+                content={viewing.content}
+                type={viewing.type}
+                downloadUrl={viewing.type === "file" ? viewing.downloadUrl : undefined}
+                renderMarkdown
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
+                {isRunning ? (
+                  <>
+                    <div className="inline-block w-5 h-5 border-2 border-gray-700 border-t-gray-300 rounded-full animate-spin" />
+                    <p className="text-gray-300 font-medium">Exploring...</p>
+                    {(status?.state?.cycle ?? 0) > 0 ? (
+                      <p className="text-xs text-gray-500">
+                        Cycle {status?.state?.cycle} in progress — select a session to view previous results
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 text-center max-w-xs">
+                        Your research agents are working. First results appear in ~5-10 minutes.
+                        This page updates automatically.
+                      </p>
+                    )}
+                  </>
+                ) : hasCycles ? (
+                  "Select a log, file, or report to view"
+                ) : (
+                  "Type a topic and click Go to start exploring"
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Drag bar */}
+          <div
+            onMouseDown={handleDragStart}
+            className="h-1.5 bg-gray-800 hover:bg-gray-600 cursor-row-resize flex-shrink-0 flex items-center justify-center"
+          >
+            <div className="w-8 h-0.5 bg-gray-600 rounded" />
+          </div>
+
+          {/* Print panel (bottom) */}
+          <div className="flex flex-col overflow-hidden" style={{ flex: `0 0 ${printHeight}%` }}>
+            <div className="px-3 py-1 border-b border-gray-800 flex items-center gap-2 flex-shrink-0">
+              <span className="text-xs font-medium text-gray-500">Print</span>
+              {printData?.running && (
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
               )}
             </div>
-          )}
+            <pre
+              ref={printRef}
+              className="flex-1 overflow-auto px-3 py-2 text-xs text-gray-400 font-mono whitespace-pre-wrap bg-gray-950 leading-relaxed"
+            >
+              {printData?.lines && printData.lines.length > 0
+                ? printData.lines.join("\n")
+                : "No exploration output."}
+            </pre>
+          </div>
         </main>
       </div>
 
