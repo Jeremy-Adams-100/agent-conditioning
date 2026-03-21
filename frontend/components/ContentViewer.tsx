@@ -1,10 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
+// Lazy-load MarkdownViewer only when needed (keeps bundle small for non-markdown pages)
+const MarkdownViewer = dynamic(() => import("./MarkdownViewer"), { ssr: false });
+
 interface ContentViewerProps {
   title: string;
   content: string;
   type: "session" | "file";
   downloadUrl?: string;
+  renderMarkdown?: boolean;
 }
 
 function downloadFile(filename: string, content: string) {
@@ -17,11 +23,12 @@ function downloadFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ContentViewer({ title, content, type, downloadUrl }: ContentViewerProps) {
+export default function ContentViewer({ title, content, type, downloadUrl, renderMarkdown }: ContentViewerProps) {
   const filename = title.split("/").pop() ?? title;
   const isPdf = filename.endsWith(".pdf");
   const isImage = filename.endsWith(".png") || filename.endsWith(".jpg") || filename.endsWith(".jpeg");
   const isBinary = (isPdf || isImage) && !!downloadUrl;
+  const isMd = renderMarkdown && filename.endsWith(".md");
 
   return (
     <div className="h-full flex flex-col">
@@ -59,6 +66,8 @@ export default function ContentViewer({ title, content, type, downloadUrl }: Con
         <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-gray-900">
           <img src={downloadUrl} alt={filename} className="max-w-full" />
         </div>
+      ) : isMd ? (
+        <MarkdownViewer content={content} />
       ) : (
         <pre className="flex-1 overflow-auto p-4 text-sm text-gray-300 font-mono whitespace-pre-wrap">
           {content}

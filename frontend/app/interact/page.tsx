@@ -13,6 +13,9 @@ import { useInteract } from "@/lib/interact-context";
 import NavTabs from "@/components/NavTabs";
 import FileTree from "@/components/FileTree";
 import ContentViewer from "@/components/ContentViewer";
+import dynamic from "next/dynamic";
+
+const MarkdownViewer = dynamic(() => import("@/components/MarkdownViewer"), { ssr: false });
 
 type ViewItem =
   | { type: "file"; path: string; title: string; content: string; downloadUrl?: string }
@@ -277,6 +280,7 @@ export default function InteractPage() {
                 content={viewing.content}
                 type="file"
                 downloadUrl={viewing.downloadUrl}
+                renderMarkdown
               />
             </>
           ) : (
@@ -291,9 +295,15 @@ export default function InteractPage() {
                   <span className="text-xs text-gray-500 font-medium uppercase">
                     {msg.role === "user" ? "You" : "Assistant"}
                   </span>
-                  <pre className="mt-1 text-sm whitespace-pre-wrap font-mono leading-relaxed">
-                    {msg.content}
-                  </pre>
+                  {msg.role === "user" ? (
+                    <pre className="mt-1 text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                      {msg.content}
+                    </pre>
+                  ) : (
+                    <div className="mt-1">
+                      <MarkdownViewer content={msg.content} />
+                    </div>
+                  )}
                 </div>
               ))}
               {loading && (
