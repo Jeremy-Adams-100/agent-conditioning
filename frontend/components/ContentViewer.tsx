@@ -28,7 +28,7 @@ export default function ContentViewer({ title, content, type, downloadUrl, rende
   const isPdf = filename.endsWith(".pdf");
   const isImage = filename.endsWith(".png") || filename.endsWith(".jpg") || filename.endsWith(".jpeg");
   const isBinary = (isPdf || isImage) && !!downloadUrl;
-  const isMd = renderMarkdown && filename.endsWith(".md");
+  const isMd = renderMarkdown && (filename.endsWith(".md") || type === "session");
 
   return (
     <div className="h-full flex flex-col">

@@ -231,6 +231,7 @@ export default function ExplorePage() {
               content={viewing.content}
               type={viewing.type}
               downloadUrl={viewing.type === "file" ? viewing.downloadUrl : undefined}
+              renderMarkdown
             />
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
