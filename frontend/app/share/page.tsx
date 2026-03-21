@@ -260,6 +260,9 @@ export default function SharePage() {
       )}
 
       <main className="flex-1 overflow-y-auto p-6 md:p-8">
+        <p className="text-xs text-gray-500 italic mb-4">
+          Beta — admin rights required to share work. All users can install packages.
+        </p>
         <div className="max-w-2xl mx-auto">
           <h1 className="text-lg font-medium text-gray-100 mb-1">Shared Packages</h1>
           <p className="text-xs text-gray-500 mb-6">
